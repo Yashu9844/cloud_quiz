@@ -1,23 +1,46 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ToastContainer, showToast } from './components/ui/toast';
+import { TooltipProvider } from "@/components/ui/tooltip";
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider } from './contexts/AuthContext';
+
+// Pages and Components
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import QuizInterface from "./components/QuizInterface";
 import ResultPage from "./components/ResultPage";
 import Dashboard from "./components/Dashboard";
 
-const queryClient = new QueryClient();
+// Styles
+import './App.css';
 
+// Create a React Query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
+
+/**
+ * Main App component that sets up:
+ * - React Query for data fetching
+ * - Toast notifications
+ * - Routing with protected routes
+ */
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+    <AuthProvider>
+      <TooltipProvider>
+        {/* Global Toast Container */}
+        <ToastContainer />
+        
+        <BrowserRouter>
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<Index />} />
           <Route path="/quiz" element={<QuizInterface />} />
           <Route path="/results" element={
@@ -25,14 +48,42 @@ const App = () => (
               score={2} 
               totalQuestions={3} 
               onRetry={() => window.location.href = '/quiz'} 
-              onReview={() => alert("Review functionality would go here")} 
+              onReview={() => {
+                // Use the toast notification instead of alert
+                showToast({
+                  message: "Review feature coming soon!",
+                  type: "info",
+                  duration: 3000
+                });
+              }}
             />
           } />
-          <Route path="/dashboard" element={<Dashboard />} />
+          
+          {/* Protected Routes - Require Authentication */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <Index activeSection="profile" />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* 404 Route */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </TooltipProvider>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
