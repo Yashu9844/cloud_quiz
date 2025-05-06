@@ -6,6 +6,7 @@ import FeaturesSection from "@/components/FeaturesSection";
 import QuizInterface from "@/components/QuizInterface";
 import ResultPage from "@/components/ResultPage";
 import Dashboard from "@/components/Dashboard";
+
 // 🛑 Import your new modal
 import SignInModal from "@/components/SignInModal"
 import SignUpModal from "@/components/SignUpModal";
@@ -27,6 +28,7 @@ const Index = ({ activeSection: initialSection = "landing" }) => {
             totalQuestions={3} 
             onRetry={() => setActiveSection("quiz")} 
             onReview={() => alert("Review functionality would go here")} 
+            timeTaken={120} // Adding the required timeTaken prop (in seconds, equivalent to 2 minutes)
           />
         );
       case "dashboard":

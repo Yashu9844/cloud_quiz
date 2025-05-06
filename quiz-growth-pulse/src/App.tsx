@@ -8,12 +8,13 @@ import { AuthProvider } from './contexts/AuthContext';
 // Pages and Components
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import Results from "./pages/Results";
 import QuizInterface from "./components/QuizInterface";
-import ResultPage from "./components/ResultPage";
 import Dashboard from "./components/Dashboard";
 
 // Styles
 import './App.css';
+import './styles.css'; // Quiz-specific styles
 
 // Create a React Query client
 const queryClient = new QueryClient({
@@ -43,21 +44,7 @@ const App = () => (
           {/* Public Routes */}
           <Route path="/" element={<Index />} />
           <Route path="/quiz" element={<QuizInterface />} />
-          <Route path="/results" element={
-            <ResultPage 
-              score={2} 
-              totalQuestions={3} 
-              onRetry={() => window.location.href = '/quiz'} 
-              onReview={() => {
-                // Use the toast notification instead of alert
-                showToast({
-                  message: "Review feature coming soon!",
-                  type: "info",
-                  duration: 3000
-                });
-              }}
-            />
-          } />
+          <Route path="/results" element={<Results />} />
           
           {/* Protected Routes - Require Authentication */}
           <Route 
