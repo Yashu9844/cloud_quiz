@@ -52,43 +52,22 @@ export default function SignInModal({ isOpen, onClose, onSwitchToSignUp }: SignI
     setIsLoading(true);
     
     try {
-      const res = await fetch("http://localhost:8000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      // Use the login function from AuthContext directly
+      const success = await login(email, password);
       
-      // Parse response carefully
-      let data: AuthResponse = {};
-      try {
-        const text = await res.text();
-        if (text) {
-          data = JSON.parse(text);
-        }
-      } catch (parseError) {
-        console.error("Error parsing response:", parseError);
-        setErrorMessage("Server returned an invalid response");
-        setIsLoading(false);
-        return;
-      }
-      
-      if (res.ok) {
-        // Use the login function from AuthContext
-        if (data.token) {
-          login(data.token);
-          console.log("Token stored successfully");
-          
-          // Close modal and provide success feedback
-          onClose();
-          
-          // You could redirect to dashboard or refresh the page here
-          // window.location.href = "/dashboard";
-        } else {
-          setErrorMessage("Login successful but no authentication token received");
+      if (success) {
+        console.log("Login successful");
+        
+        // Don't refresh the page since we want to maintain state and pending quiz ID
+        onClose();
+        
+        // Check for pending quiz selection
+        const pendingQuizId = localStorage.getItem('pendingQuizId');
+        if (pendingQuizId) {
+          console.log(`Pending quiz ID found: ${pendingQuizId}. Continuing with quiz selection.`);
         }
       } else {
-        // Display specific error message from server
-        setErrorMessage(data.message || data.error || "Invalid email or password");
+        setErrorMessage("Invalid email or password");
       }
     } catch (err) {
       console.error("Login error:", err);

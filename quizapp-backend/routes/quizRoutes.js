@@ -1,5 +1,5 @@
 import express from 'express';
-import { createQuiz, getAllQuizzes } from '../controllers/quizController.js';
+import { createQuiz, getAllQuizzes, deleteQuiz } from '../controllers/quizController.js';
 import { authenticateUser } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -9,5 +9,8 @@ router.post('/create', authenticateUser, createQuiz);
 
 // Public: Get all quizzes
 router.get('/', getAllQuizzes);
+
+// Protected: Delete a quiz by ID
+router.delete('/:id', authenticateUser, deleteQuiz);
 
 export default router;

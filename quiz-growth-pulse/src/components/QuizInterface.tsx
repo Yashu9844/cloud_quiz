@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Clock, ChevronRight, AlertCircle, Loader2, BookOpen, Code, Calculator, Brain, Dices } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import SignInModal from "@/components/SignInModal";
+import SignUpModal from "@/components/SignUpModal";
 
 // Quiz model based on backend
 interface Quiz {
@@ -22,6 +24,7 @@ interface QuizQuestion {
   options: string[];
   correct_answer: string[];
   created_at: string;
+  _id?: string; // MongoDB ID field
 }
 
 // API response interface for questions
@@ -51,38 +54,249 @@ const difficultyColors = {
 };
 
 // Base URL for API
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'http://localhost:8000/api'; // Include /api in base URL
 
-// Helper function to get auth token from localStorage
-const getAuthToken = () => localStorage.getItem('authToken');
+// Import the useAuth hook for authentication
+import { useAuth } from "@/contexts/AuthContext";
 
 
 const QuizInterface = () => {
-  // Quiz state
+  // Navigation and Auth
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated, getToken } = useAuth();
+  
+  // Quiz States
   const [status, setStatus] = useState<QuizStatus>('quiz_selection');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(300);
   const [quizData, setQuizData] = useState<QuizQuestion[]>([]);
   const [availableQuizzes, setAvailableQuizzes] = useState<Quiz[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
+  
+  // UI States
   const [isNavigating, setIsNavigating] = useState(false);
   const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOptionSelecting, setIsOptionSelecting] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  
-  // Import useNavigate and useLocation hooks
-  const navigate = useNavigate();
-  const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [score, setScore] = useState(0);
   const [userAnswers, setUserAnswers] = useState<string[][]>([]);
   const [quizStartTime, setQuizStartTime] = useState<number | null>(null);
   
+  // Auth Modal States
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  
   const currentQuestion = quizData.length > 0 ? quizData[currentQuestionIndex] : null;
   const progress = quizData.length > 0 ? ((currentQuestionIndex + 1) / quizData.length) * 100 : 0;
+  
+  // Fetch quiz questions (declare before handleQuizSelect to avoid circular dependency)
+  const fetchQuizQuestions = useCallback(async (quiz: Quiz) => {
+    setStatus('loading');
+    setError(null);
+    
+    try {
+      // First check auth token
+      const token = getToken();
+      if (!token) {
+        console.log('No auth token found. Opening sign-in modal.');
+        setShowSignInModal(true);
+        return;
+      }
+
+      // Validate quiz ID
+      if (!quiz?.id) {
+        throw new Error('Invalid quiz ID');
+      }
+
+      console.log(`Attempting to fetch questions for quiz: ${quiz.title} (${quiz.id})`);
+
+      // Make the API request with proper error handling
+      try {
+        // API_BASE_URL already includes /api, so don't add it again
+        const url = `${API_BASE_URL}/question/quiz?quiz_id=${quiz.id}`;
+ // Log detailed request information for debugging
+        console.log('Making API request with:', {
+          url: url,
+          token: token ? 'Bearer token present' : 'No token',
+          contentType: 'application/json',
+          timestamp: new Date().toISOString(),
+          quizId: quiz.id,
+          quizTitle: quiz.title
+        });
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          // Add a reasonable timeout
+          signal: AbortSignal.timeout(10000)
+        });
+
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Error response:', errorData);
+
+          if (response.status === 401) {
+            throw new Error('Authentication required. Please sign in again.');
+          }
+          if (response.status === 404) {
+            throw new Error(`No questions found for "${quiz.title}". Please try another quiz.`);
+          }
+          throw new Error(`Failed to load questions (${response.status})`);
+        }
+
+        const data = await response.json();
+        console.log('Received data:', {
+          questionCount: data.questions?.length || 0,
+          timeLimit: data.time_limit || 'default',
+          firstQuestionPreview: data.questions && data.questions.length > 0 
+            ? { 
+                id: data.questions[0].id, 
+                type: data.questions[0].question_type,
+                hasOptions: Array.isArray(data.questions[0].options)
+              } 
+            : 'No questions'
+        });
+
+        if (!data.questions || !Array.isArray(data.questions)) {
+          throw new Error('Invalid response format from server');
+        }
+
+        if (data.questions.length === 0) {
+          throw new Error(`No questions available for "${quiz.title}". Please try another quiz.`);
+        }
+
+        // Update state with received data
+        setQuizData(data.questions);
+        setTimeLeft(data.time_limit || 300);
+        setCurrentQuestionIndex(0);
+        setSelectedOptions([]);
+        setUserAnswers([]);
+        setScore(0);
+        setQuizStartTime(Date.now());
+        setStatus('in_progress');
+
+      } catch (error) {
+        console.error('Network or parsing error:', error);
+        
+        // Check if it's an AbortError (timeout)
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          throw new Error('Request timed out. The server took too long to respond.');
+        }
+        
+        // Check for network connectivity issues
+        if (!navigator.onLine) {
+          throw new Error('You appear to be offline. Please check your internet connection.');
+        }
+        
+        throw error;
+      }
+
+    } catch (error) {
+      console.error('Error in fetchQuizQuestions:', error);
+      
+      // Clear any stale data
+      setQuizData([]);
+      
+      // Set appropriate error message with helpful context
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to load questions';
+      
+      setError(`${errorMessage} Please try again or choose another quiz.`);
+      setStatus('error');
+    }
+  }, [getToken, setShowSignInModal]);
+  
+  // Handle quiz selection (define before it's used in useEffect)
+  const handleQuizSelect = useCallback((quiz: Quiz) => {
+    console.log('Quiz selected:', quiz);
+    
+    if (!quiz?.id) {
+      setError('Invalid quiz selected');
+      setStatus('error');
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      console.log('No auth token found. Opening sign-in modal.');
+      setShowSignInModal(true);
+      // Store quiz for after login
+      localStorage.setItem('pendingQuizId', quiz.id);
+      return;
+    }
+
+    // Only set quiz and fetch questions if we have a valid token
+    console.log(`Selected quiz: ${quiz.title} (ID: ${quiz.id})`);
+    setSelectedQuiz(quiz);
+    fetchQuizQuestions(quiz);
+  }, [getToken, fetchQuizQuestions, setShowSignInModal, setError, setStatus, setSelectedQuiz]);
+  
+  // Check authentication on mount
+  useEffect(() => {
+    const token = getToken();
+    if (!token && status !== 'quiz_selection') {
+      console.warn('User is not authenticated. Showing authentication modal.');
+      setError('Please sign in to take quizzes');
+      setStatus('error');
+    }
+  }, [getToken, status]);
+  
+  // Add immediate auth check on component load
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      console.log('No auth token found on initial load');
+      // Don't show modal immediately, only when trying to take a quiz
+      // This prevents the modal from showing when just browsing
+    }
+  }, [getToken]);
+  
+  // Add auth check effect when a quiz is selected
+  useEffect(() => {
+    // Check auth status whenever a quiz is selected
+    if (selectedQuiz && !getToken()) {
+      console.log('Quiz selected but no valid token found. Opening sign-in modal.');
+      setShowSignInModal(true);
+      return;
+    }
+  }, [selectedQuiz, getToken]);
+  
+  // Handle pending quiz selection after successful authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      const token = getToken();
+      if (!token) {
+        console.log('User is authenticated but token is missing or invalid');
+        return;
+      }
+      
+      const pendingQuizId = localStorage.getItem('pendingQuizId');
+      if (pendingQuizId) {
+        console.log(`Attempting to resume quiz selection for quiz ID: ${pendingQuizId}`);
+        const quiz = availableQuizzes.find(q => q.id === pendingQuizId);
+        if (quiz) {
+          console.log(`Found pending quiz: ${quiz.title}`);
+          setSelectedQuiz(quiz);
+          fetchQuizQuestions(quiz);
+          localStorage.removeItem('pendingQuizId');
+        } else {
+          console.log(`No quiz found with ID: ${pendingQuizId}, removing from localStorage`);
+          localStorage.removeItem('pendingQuizId');
+        }
+      }
+    }
+  }, [isAuthenticated, availableQuizzes, fetchQuizQuestions, setSelectedQuiz, getToken]);
   
   // Fetch available quizzes on component mount
   useEffect(() => {
@@ -127,7 +341,8 @@ const QuizInterface = () => {
     setError(null);
     
     try {
-      const token = getAuthToken();
+      // Get token using the auth context
+      const token = getToken();
       const headers: HeadersInit = {
         'Content-Type': 'application/json'
       };
@@ -135,10 +350,17 @@ const QuizInterface = () => {
       // Add auth token if available
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        // Show public quizzes without authentication
+        console.warn('No auth token available for fetching quizzes - showing public quizzes');
       }
       
+      // API_BASE_URL already includes /api, so don't add it again
+      const url = `${API_BASE_URL}/quiz`;
+      console.log('Fetching available quizzes from:', url);
+      
       // Make API call to fetch available quizzes
-      const response = await fetch(`${API_BASE_URL}/quiz`, {
+      const response = await fetch(url, {
         method: 'GET',
         headers
       });
@@ -169,66 +391,19 @@ const QuizInterface = () => {
     }
   };
   
-  // Fetch quiz questions
-  const fetchQuizQuestions = useCallback(async (quiz: Quiz) => {
-    setStatus('loading');
-    setError(null);
-    
-    try {
-      const token = getAuthToken();
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
-      
-      // Add auth token if available
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      // API endpoint to be implemented: fetch questions for a specific quiz
-      const response = await fetch(`${API_BASE_URL}/questions?quiz_id=${quiz.id}`, {
-        method: 'GET',
-        headers
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-      
-      // Parse the response
-      const data = await response.json();
-      
-      if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
-        throw new Error(`No questions available for ${quiz.title}`);
-      }
-      
-      setQuizData(data.questions);
-      
-      // If the API provides a time limit, use it
-      if (data.time_limit) {
-        setTimeLeft(data.time_limit);
-      } else {
-        setTimeLeft(300); // Default to 5 minutes
-      }
-      
-      setCurrentQuestionIndex(0);
-      setSelectedOptions([]);
-      setUserAnswers([]);
-      setScore(0);
-      setQuizStartTime(Date.now());
-      setStatus('in_progress');
-    } catch (err) {
-      console.error('Error fetching quiz questions:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load quiz questions. Please try again.');
-      setStatus('error');
-    }
-  }, []);
+  // Helper function to check if a string is a valid UUID
+  const isValidUUID = (id: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+  };
+
   
   // Submit quiz attempt to backend
   const submitQuizAttempt = useCallback(async (data: QuizAttempt) => {
     setIsSubmitting(true);
     try {
-      const token = getAuthToken();
+      // Get token using auth context
+      const token = getToken();
       const headers: HeadersInit = {
         'Content-Type': 'application/json'
       };
@@ -236,10 +411,12 @@ const QuizInterface = () => {
       // Add auth token if available
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        throw new Error('Authentication token is missing. Your quiz results may not be saved.');
       }
       
-      // Make API call to submit the quiz attempt
-      const response = await fetch(`${API_BASE_URL}/quiz-attempt/create`, {
+      // API_BASE_URL already includes /api, so don't add it again
+      const response = await fetch(`${API_BASE_URL}/quiz-attempts/create`, {
         method: 'POST',
         headers,
         body: JSON.stringify(data)
@@ -263,11 +440,19 @@ const QuizInterface = () => {
     }
   }, []);
   
-  // Handle quiz selection
-  const handleQuizSelect = (quiz: Quiz) => {
-    setSelectedQuiz(quiz);
-    fetchQuizQuestions(quiz);
+  // Helper function to validate quiz_id
+  const validateQuizId = (quizId: string): boolean => {
+    if (!quizId || quizId.trim() === '') {
+      console.error('Invalid quiz ID: Empty or undefined');
+      return false;
+    }
+    
+    // Add any specific quiz_id format validation here
+    // For example, if it should be a UUID or have specific format
+    
+    return true;
   };
+
   
   // Filter quizzes by difficulty and topic
   const getFilteredQuizzes = () => {
@@ -293,10 +478,11 @@ const QuizInterface = () => {
   };
   
   // Go back to quiz selection
-  const handleSelectAnotherQuiz = () => {
+  const handleSelectAnotherQuiz = useCallback(() => {
     setStatus('quiz_selection');
     setSelectedQuiz(null);
-  };
+    setError(null);
+  }, []);
 
   const handleOptionSelect = (option: string) => {
     if (!currentQuestion) return;
@@ -550,7 +736,9 @@ const QuizInterface = () => {
           </div>
           
           <div className="p-8 text-center">
-            <p className="text-gray-500 dark:text-gray-400 mb-2">Preparing your questions...</p>
+            <p className="text-gray-500 dark:text-gray-400 mb-2">
+              {selectedQuiz ? `Fetching questions for "${selectedQuiz.title}" quiz...` : 'Preparing your questions...'}
+            </p>
             <div className="w-48 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto overflow-hidden">
               <motion.div 
                 className="h-full bg-primary"
@@ -559,6 +747,9 @@ const QuizInterface = () => {
                 transition={{ duration: 1.5, repeat: Infinity }}
               />
             </div>
+            <p className="text-xs text-gray-400 mt-4">
+              Connecting to {API_BASE_URL}/question/quiz?quiz_id={selectedQuiz?.id}
+            </p>
           </div>
         </div>
       </div>
@@ -567,34 +758,67 @@ const QuizInterface = () => {
   
   // Render error state
   const renderError = () => {
+    const isAuthError = error?.toLowerCase().includes('auth') || 
+                       error?.toLowerCase().includes('sign in') || 
+                       !isAuthenticated;
+    
     return (
       <div className="max-w-3xl mx-auto p-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-quiz overflow-hidden">
           <div className="p-6 bg-quiz-gradient border-b">
-            <h2 className="text-xl font-semibold text-center">Error Loading Quiz</h2>
+            <h2 className="text-xl font-semibold text-center">
+              {isAuthError ? 'Authentication Required' : 'Error Loading Quiz'}
+            </h2>
           </div>
           
           <div className="p-8 text-center">
             <div className="inline-flex items-center justify-center mb-4 bg-red-100 dark:bg-red-900/20 p-3 rounded-full">
               <AlertCircle className="h-8 w-8 text-red-500" />
             </div>
-            <h3 className="text-lg font-medium mb-2">Something went wrong</h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">{error || 'Failed to load quiz questions'}</p>
+            <h3 className="text-lg font-medium mb-2">
+              {isAuthError ? 'Please Sign In' : 'Something went wrong'}
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-6">{error}</p>
+            
+            {/* Technical Details for non-auth errors */}
+            {!isAuthError && (
+              <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-left">
+                <p className="text-sm font-medium mb-2">Technical Details:</p>
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p>Browser: {navigator.userAgent}</p>
+                  <p>Network Status: {navigator.onLine ? "Online" : "Offline"}</p>
+                  <p>Time: {new Date().toISOString()}</p>
+                  <p>Quiz ID: {selectedQuiz?.id || 'None selected'}</p>
+                  <p>API endpoint: {`${API_BASE_URL}/question/quiz`}</p>
+                </div>
+              </div>
+            )}
             
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button 
-                onClick={handleSelectAnotherQuiz}
-                className="btn-outline flex items-center justify-center"
-              >
-                Choose Another Quiz
-              </button>
-              {selectedQuiz && (
+              {isAuthError ? (
                 <button 
-                  onClick={() => fetchQuizQuestions(selectedQuiz)}
-                  className="btn-primary flex items-center justify-center"
+                  onClick={() => setShowSignInModal(true)}
+                  className="btn-primary"
                 >
-                  Try Again
+                  Sign In to Continue
                 </button>
+              ) : (
+                <>
+                  <button 
+                    onClick={handleSelectAnotherQuiz}
+                    className="btn-outline"
+                  >
+                    Choose Another Quiz
+                  </button>
+                  {selectedQuiz && (
+                    <button 
+                      onClick={() => fetchQuizQuestions(selectedQuiz)}
+                      className="btn-primary"
+                    >
+                      Try Again
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -757,6 +981,25 @@ const QuizInterface = () => {
       {status === 'loading' && renderLoading()}
       {status === 'error' && renderError()}
       {status === 'in_progress' && renderQuiz()}
+      
+      {/* Authentication Modals */}
+      <SignInModal 
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+        onSwitchToSignUp={() => {
+          setShowSignInModal(false);
+          setShowSignUpModal(true);
+        }}
+      />
+      
+      <SignUpModal
+        isOpen={showSignUpModal}
+        onClose={() => setShowSignUpModal(false)}
+        onSwitchToSignIn={() => {
+          setShowSignUpModal(false);
+          setShowSignInModal(true);
+        }}
+      />
     </>
   );
 };

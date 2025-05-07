@@ -6,6 +6,7 @@ import {
   getQuestionById,
   updateQuestion,
   deleteQuestion,
+  getQuizQuestions,
 } from "../controllers/questionController.js"
 
 const router = express.Router();
@@ -15,6 +16,9 @@ router.post("/create", authenticateUser, createQuestion);
 
 // Get all questions
 router.get("/", authenticateUser, getAllQuestions);
+
+// Get questions for a quiz (with limit)
+router.get("/quiz", authenticateUser, getQuizQuestions);
 
 // Get a question by ID
 router.get("/:id", authenticateUser, getQuestionById);
