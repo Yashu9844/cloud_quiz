@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { 
+  BrowserRouter, 
+  Routes, 
+  Route,
+  createBrowserRouter,
+  RouterProvider
+} from "react-router-dom";
 import { ToastContainer, showToast } from './components/ui/toast';
 import { TooltipProvider } from "@/components/ui/tooltip";
 import ProtectedRoute from './components/ProtectedRoute';
@@ -39,36 +45,41 @@ const App = () => (
         {/* Global Toast Container */}
         <ToastContainer />
         
-        <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<Index />} />
-          <Route path="/quiz" element={<QuizInterface />} />
-          <Route path="/results" element={<Results />} />
-          
-          {/* Protected Routes - Require Authentication */}
-          <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/profile" 
-            element={
-              <ProtectedRoute>
-                <Index activeSection="profile" />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* 404 Route */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true
+          }}
+        >
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<Index />} />
+            <Route path="/quiz" element={<QuizInterface />} />
+            <Route path="/results" element={<Results />} />
+            
+            {/* Protected Routes - Require Authentication */}
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <Index activeSection="profile" />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* 404 Route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>

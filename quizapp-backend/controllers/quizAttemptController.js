@@ -57,6 +57,100 @@ export const createQuizAttempt = async (req, res) => {
   }
 };
 
+// Submit an answer for a quiz attempt
+export const submitQuizAnswer = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    const { question_id, selected_answer, question_order } = req.body;
+    const user_id = req.user.id;
+
+    // Find the attempt
+    const attempt = await QuizAttempt.findOne({ id: attemptId });
+    
+    if (!attempt) {
+      return res.status(404).json({ message: "Quiz attempt not found" });
+    }
+
+    // Verify the user owns this attempt
+    if (attempt.user_id !== user_id) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // Verify the attempt is still in progress
+    if (attempt.status !== "IN_PROGRESS") {
+      return res.status(400).json({ message: "This quiz attempt is already completed or abandoned" });
+    }
+
+    // Find the question
+    const question = await Question.findOne({ id: question_id });
+    
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    // Check if this question belongs to the quiz being attempted
+    if (question.quiz_id !== attempt.quiz_id) {
+      return res.status(400).json({ message: "This question does not belong to the attempted quiz" });
+    }
+
+    // Check if an answer for this question already exists
+    const existingAnswer = await QuizAttemptAnswer.findOne({ 
+      attempt_id: attemptId,
+      question_id: question_id
+    });
+
+    if (existingAnswer) {
+      return res.status(400).json({ message: "Answer for this question already submitted" });
+    }
+
+    // Determine if the answer is correct
+    const is_correct = JSON.stringify(selected_answer) === JSON.stringify(question.correct_answer);
+
+    // Create new answer
+    const newAnswer = await QuizAttemptAnswer.create({
+      id: uuidv4(),
+      attempt_id: attemptId,
+      question_id: question_id,
+      selected_answer,
+      is_correct,
+      question_order: question_order || 0
+    });
+
+    // Update the attempt status if this was the last question
+    const answersCount = await QuizAttemptAnswer.countDocuments({ attempt_id: attemptId });
+    const questionsCount = await Question.countDocuments({ quiz_id: attempt.quiz_id });
+    
+    if (answersCount === questionsCount) {
+      // Calculate the final score
+      const correctAnswers = await QuizAttemptAnswer.countDocuments({ 
+        attempt_id: attemptId,
+        is_correct: true
+      });
+      
+      // Update attempt with completion details
+      await QuizAttempt.updateOne(
+        { id: attemptId },
+        { 
+          status: "COMPLETED",
+          completed_at: new Date(),
+          score: (correctAnswers / questionsCount) * 100,
+          total_questions: questionsCount,
+          correct_answers: correctAnswers
+        }
+      );
+    }
+
+    res.status(201).json({ 
+      message: "Answer submitted successfully", 
+      is_correct,
+      answer: newAnswer
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message || "Error submitting answer" });
+  }
+};
+
 // Get all quiz attempts for a user
 export const getUserQuizAttempts = async (req, res) => {
   try {

@@ -17,6 +17,11 @@ const quizAttemptAnswerSchema = new mongoose.Schema({
     ref: "Question",
     required: true,
   },
+  question_order: {
+    type: Number,
+    required: true,
+    default: 0
+  },
   selected_answer: {
     type: mongoose.Schema.Types.Mixed, // JSON
     required: true,
@@ -25,6 +30,35 @@ const quizAttemptAnswerSchema = new mongoose.Schema({
     type: Boolean,
     required: true,
   },
+  created_at: {
+    type: Date,
+    default: Date.now,
+  }
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
+});
+
+// Add indexes for better query performance
+quizAttemptAnswerSchema.index({ attempt_id: 1 });
+quizAttemptAnswerSchema.index({ question_id: 1 });
+quizAttemptAnswerSchema.index({ attempt_id: 1, question_id: 1 }, { unique: true });
+quizAttemptAnswerSchema.index({ created_at: -1 });
+
+// Virtual for getting the question details
+quizAttemptAnswerSchema.virtual('question', {
+  ref: 'Question',
+  localField: 'question_id',
+  foreignField: 'id',
+  justOne: true
+});
+
+// Virtual for getting quiz attempt details
+quizAttemptAnswerSchema.virtual('attempt', {
+  ref: 'QuizAttempt',
+  localField: 'attempt_id',
+  foreignField: 'id',
+  justOne: true
 });
 
 export default mongoose.model("QuizAttemptAnswer", quizAttemptAnswerSchema);

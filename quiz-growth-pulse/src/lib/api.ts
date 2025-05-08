@@ -40,6 +40,22 @@ export interface ApiError {
   status?: number;
 }
 
+// User type for auth responses
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Authentication response
+export interface AuthResponse {
+  token: string;
+  user: User;
+  message: string;
+}
+
 // Create a base axios instance
 const api: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -123,13 +139,13 @@ export const quizApi = {
 // API methods for authentication
 export const authApi = {
   // Login
-  login: async (email: string, password: string): Promise<{ token: string }> => {
+  login: async (email: string, password: string): Promise<AuthResponse> => {
     const response = await api.post('/auth/login', { email, password });
     return response.data;
   },
   
   // Register
-  register: async (username: string, email: string, password: string): Promise<{ token: string }> => {
+  register: async (username: string, email: string, password: string): Promise<AuthResponse> => {
     const response = await api.post('/auth/register', { username, email, password });
     return response.data;
   }

@@ -4,6 +4,7 @@ import { Clock, ChevronRight, AlertCircle, Loader2, BookOpen, Code, Calculator, 
 import { useNavigate, useLocation } from "react-router-dom";
 import SignInModal from "@/components/SignInModal";
 import SignUpModal from "@/components/SignUpModal";
+import { createAttempt, submitAnswer } from "@/services/attempt";
 
 // Quiz model based on backend
 interface Quiz {
@@ -74,12 +75,14 @@ const QuizInterface = () => {
   const [quizData, setQuizData] = useState<QuizQuestion[]>([]);
   const [availableQuizzes, setAvailableQuizzes] = useState<Quiz[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
+  const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(null);
   
   // UI States
   const [isNavigating, setIsNavigating] = useState(false);
   const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOptionSelecting, setIsOptionSelecting] = useState(false);
+  const [isAnswerSubmitting, setIsAnswerSubmitting] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +122,7 @@ const QuizInterface = () => {
       try {
         // API_BASE_URL already includes /api, so don't add it again
         const url = `${API_BASE_URL}/question/quiz?quiz_id=${quiz.id}`;
- // Log detailed request information for debugging
+        // Log detailed request information for debugging
         console.log('Making API request with:', {
           url: url,
           token: token ? 'Bearer token present' : 'No token',
@@ -173,6 +176,18 @@ const QuizInterface = () => {
 
         if (data.questions.length === 0) {
           throw new Error(`No questions available for "${quiz.title}". Please try another quiz.`);
+        }
+        
+        // Create a new quiz attempt using the service
+        try {
+          console.log('Creating new quiz attempt for quiz:', quiz.id);
+          const attempt = await createAttempt(quiz.id);
+          console.log('Quiz attempt created:', attempt);
+          setCurrentAttemptId(attempt.id);
+        } catch (attemptError) {
+          console.error('Error creating quiz attempt:', attemptError);
+          // Continue with quiz even if attempt creation fails
+          // This way user can still take the quiz even if the backend has issues
         }
 
         // Update state with received data
@@ -398,45 +413,50 @@ const QuizInterface = () => {
   };
 
   
-  // Submit quiz attempt to backend
-  const submitQuizAttempt = useCallback(async (data: QuizAttempt) => {
-    setIsSubmitting(true);
+  // Submit the answer for the current question in real-time
+  const submitAnswerToBackend = useCallback(async (
+    attemptId: string, 
+    questionId: string, 
+    selectedAnswer: string[], 
+    questionOrder: number
+  ) => {
+    if (!attemptId || !questionId) {
+      console.error('Missing required data for answer submission', { attemptId, questionId });
+      return false;
+    }
+    
     try {
-      // Get token using auth context
-      const token = getToken();
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
-      
-      // Add auth token if available
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      } else {
-        throw new Error('Authentication token is missing. Your quiz results may not be saved.');
-      }
-      
-      // API_BASE_URL already includes /api, so don't add it again
-      const response = await fetch(`${API_BASE_URL}/quiz-attempts/create`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data)
+      setIsAnswerSubmitting(true);
+      console.log('Submitting answer:', {
+        attemptId,
+        questionId,
+        selectedAnswer,
+        questionOrder
       });
       
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      const response = await submitAnswer(
+        attemptId,
+        questionId,
+        selectedAnswer,
+        questionOrder
+      );
+      
+      console.log('Answer submission response:', response);
+      
+      // Update local state based on the response
+      if (response.is_correct !== undefined) {
+        // Optionally update UI to show if answer was correct
+        console.log(`Answer was ${response.is_correct ? 'correct' : 'incorrect'}`);
       }
       
-      // Parse the response if needed
-      const result = await response.json();
-      console.log("Quiz attempt submitted successfully:", result);
-      return result;
-    } catch (err) {
-      console.error('Error submitting quiz attempt:', err);
-      // Show error toast or notification (optional)
-      // Since we're still navigating to results, just log the error
-      return null;
+      return true;
+    } catch (error) {
+      console.error('Error submitting answer:', error);
+      // Don't block quiz progress on submission errors
+      // Just log and continue
+      return false;
     } finally {
-      setIsSubmitting(false);
+      setIsAnswerSubmitting(false);
     }
   }, []);
   
@@ -484,18 +504,36 @@ const QuizInterface = () => {
     setError(null);
   }, []);
 
-  const handleOptionSelect = (option: string) => {
+  const handleOptionSelect = async (option: string) => {
     if (!currentQuestion) return;
     
     setIsOptionSelecting(true);
     
     try {
+      let newSelection: string[] = [];
+      
       // For MCQ questions, only allow one selected option
       if (currentQuestion.question_type === 'MCQ') {
-        setSelectedOptions([option]);
+        newSelection = [option];
+        setSelectedOptions(newSelection);
+        
+        // For MCQ, submit the answer immediately since it's a single choice
+        if (currentAttemptId) {
+          try {
+            await submitAnswerToBackend(
+              currentAttemptId,
+              currentQuestion.id,
+              newSelection,
+              currentQuestionIndex + 1
+            );
+          } catch (submitError) {
+            console.error("Error submitting answer:", submitError);
+            // Continue with quiz even if submission fails
+          }
+        }
       } else if (currentQuestion.question_type === 'MULTI_SELECT') {
         // For MULTI_SELECT, toggle the selection
-        const newSelection = [...selectedOptions];
+        newSelection = [...selectedOptions];
         const optionIndex = newSelection.indexOf(option);
         
         if (optionIndex === -1) {
@@ -506,6 +544,9 @@ const QuizInterface = () => {
           newSelection.splice(optionIndex, 1);
         }
         setSelectedOptions(newSelection);
+        
+        // For multi-select, we don't submit until the "Next" button is clicked
+        // as the user may select/deselect multiple options
       }
     } catch (error) {
       console.error("Error selecting option:", error);
@@ -514,7 +555,7 @@ const QuizInterface = () => {
     }
   };
   
-  const handleNextQuestion = () => {
+  const handleNextQuestion = async () => {
     if (!currentQuestion) return;
     
     // Record user's answer
@@ -522,7 +563,7 @@ const QuizInterface = () => {
     newUserAnswers[currentQuestionIndex] = selectedOptions;
     setUserAnswers(newUserAnswers);
     
-    // Check if answer is correct
+    // Check if answer is correct locally (for UI feedback)
     let isCorrect = false;
     if (currentQuestion.question_type === 'MCQ') {
       isCorrect = currentQuestion.correct_answer.includes(selectedOptions[0]);
@@ -535,6 +576,24 @@ const QuizInterface = () => {
       isCorrect = 
         selectedSet.size === correctSet.size && 
         selectedOptions.every(option => correctSet.has(option));
+        
+      // For MULTI_SELECT, submit the answer when Next is clicked
+      if (currentAttemptId) {
+        try {
+          setIsAnswerSubmitting(true);
+          await submitAnswerToBackend(
+            currentAttemptId,
+            currentQuestion.id,
+            selectedOptions,
+            currentQuestionIndex + 1
+          );
+        } catch (submitError) {
+          console.error("Error submitting multi-select answer:", submitError);
+          // Continue with quiz even if submission fails
+        } finally {
+          setIsAnswerSubmitting(false);
+        }
+      }
     }
     
     // Update score if answer is correct
@@ -551,25 +610,8 @@ const QuizInterface = () => {
       const finalScore = isCorrect ? score + 1 : score;
       setScore(finalScore);
       
-      // Quiz completed, submit the attempt
-      if (selectedQuiz) {
-        const timeTaken = quizStartTime ? Math.floor((Date.now() - quizStartTime) / 1000) : 300 - timeLeft;
-        
-        try {
-          submitQuizAttempt({
-            quiz_id: selectedQuiz.id,
-            score: finalScore,
-            total_questions: quizData.length,
-            correct_answers: finalScore,
-            time_taken: timeTaken
-          });
-        } catch (error) {
-          console.error("Error submitting quiz attempt:", error);
-          // Continue to completion despite submission errors
-        }
-      }
-      
-      // Mark quiz as completed
+      // The quiz is now completed
+      // The backend will automatically complete the attempt when all answers are submitted
       setStatus('completed');
     }
   };
@@ -904,13 +946,18 @@ const QuizInterface = () => {
               
               <button
                 onClick={handleNextQuestion}
-                disabled={selectedOptions.length === 0 || isSubmitting}
-                className={`btn-primary flex items-center ${selectedOptions.length === 0 || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={selectedOptions.length === 0 || isSubmitting || isAnswerSubmitting}
+                className={`btn-primary flex items-center ${selectedOptions.length === 0 || isSubmitting || isAnswerSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {isSubmitting && currentQuestionIndex === quizData.length - 1 ? (
+                {(isSubmitting || isAnswerSubmitting) && currentQuestionIndex === quizData.length - 1 ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Submitting...
+                  </>
+                ) : isAnswerSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving Answer...
                   </>
                 ) : (
                   <>

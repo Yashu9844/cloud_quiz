@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import axios from "axios";
+
+// Get API URL from environment variables
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 interface SignUpModalProps {
   isOpen: boolean;
@@ -56,38 +60,63 @@ export default function SignUpModal({ isOpen, onClose, onSwitchToSignIn }: SignU
     }
 
     setIsLoading(true);
-    try {
-      const res = await fetch("http://localhost:8000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
-      });
-  
-      let data: ApiResponse = {};
+    
+    // Maximum number of retries
+    const MAX_RETRIES = 2;
+    let retries = 0;
+    let success = false;
+    
+    while (retries <= MAX_RETRIES && !success) {
       try {
-        const text = await res.text();
-        if (text) {
-          data = JSON.parse(text);
+        // If this is a retry, add a small delay
+        if (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+          console.log(`Retrying registration attempt (${retries}/${MAX_RETRIES})...`);
         }
-      } catch (parseError) {
-        console.error("Error parsing response:", parseError);
-        setError("Server returned an invalid response");
-        setIsLoading(false);
-        return;
-      }
-  
-      if (res.ok) {
+        
+        const res = await axios.post(`${API_URL}/auth/register`, 
+          { username, email, password },
+          { 
+            headers: { "Content-Type": "application/json" },
+            timeout: 5000 // 5 second timeout
+          }
+        );
+        
         // Success! Switch to sign in after registration
-        onSwitchToSignIn(); 
-      } else {
-        setError(data.message || data.error || "Registration failed. Please try again.");
+        console.log("Registration successful:", res.data);
+        onSwitchToSignIn();
+        success = true;
+        
+      } catch (err) {
+        retries++;
+        console.error("Registration attempt failed:", err);
+        
+        // If we've exhausted all retries or it's a client error (not network-related)
+        // then break out of the retry loop
+        if (retries > MAX_RETRIES || (axios.isAxiosError(err) && err.response && err.response.status >= 400 && err.response.status < 500)) {
+          let errorMessage = "Registration failed. Please try again.";
+          
+          if (axios.isAxiosError(err)) {
+            if (err.code === 'ECONNABORTED') {
+              errorMessage = "Request timed out. The server took too long to respond.";
+            } else if (err.code === 'ERR_NETWORK' || err.message.includes('Network Error')) {
+              errorMessage = "Cannot connect to the server. Please check if the backend is running.";
+            } else if (err.response) {
+              // Server responded with an error
+              const data = err.response.data;
+              errorMessage = data.message || data.error || `Server error: ${err.response.status}`;
+            }
+          }
+          
+          setError(errorMessage);
+          break;
+        }
+        
+        // If we still have retries left, continue to the next iteration
       }
-    } catch (err) {
-      console.error("Registration error:", err);
-      setError("Network error occurred. Please check your connection and try again.");
-    } finally {
-      setIsLoading(false);
     }
+    
+    setIsLoading(false);
   };
   
   if (!isOpen) return null;
