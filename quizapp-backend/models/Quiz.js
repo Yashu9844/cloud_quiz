@@ -27,6 +27,21 @@ const quizSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Add index for the 'id' field for better lookup performance
+quizSchema.index({ id: 1 }, { unique: true });
+quizSchema.index({ topic: 1 }); // Add index on topic for faster filtering
+
+// Virtual for getting all questions for this quiz
+quizSchema.virtual('questions', {
+  ref: 'Question',
+  localField: 'id',
+  foreignField: 'quiz_id',
+  justOne: false // One quiz has many questions
 });
 
 export const Quiz = mongoose.model('Quiz', quizSchema);

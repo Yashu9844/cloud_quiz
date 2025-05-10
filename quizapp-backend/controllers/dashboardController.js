@@ -85,6 +85,7 @@ export const getDashboardData = async (req, res) => {
     const dashboardData = {
       weak_topics: mlInsight?.weak_topics || [],
       strong_topics: mlInsight?.strong_topics || [],
+      confidence_scores: mlInsight?.confidence_scores || {},
       topic_proficiency: topicProficiency,
       performance_history: performanceHistory,
       badges: badgeAchievements,

@@ -5,7 +5,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadialBarChart, RadialBar, PieChart, Pie, Cell
 } from "recharts";
-import { TrendingUp, BookOpen, Target, Calendar, BrainCircuit, AlertCircle, Loader2, LogIn } from "lucide-react";
+import { TrendingUp, BookOpen, Target, Calendar, BrainCircuit, AlertCircle, Loader2, LogIn, BarChart2, ExternalLink } from "lucide-react";
 import { fetchDashboardData, DashboardData } from "../services/dashboard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -200,11 +200,11 @@ const Dashboard = () => {
             .slice(0, 5);  // Take top 5 weakest topics
             
           setWeakTopicsData(topicItems);
-        } else if (data.weak_topics && data.weak_topics.length > 0) {
-          // Fallback to weak_topics array if no proficiency scores
-          const topicItems = data.weak_topics.map((topic, index) => ({
+        } else if (data.weak_topics && Object.keys(data.weak_topics).length > 0) {
+          // Fallback to weak_topics object if no proficiency scores
+          const topicItems = Object.entries(data.weak_topics).map(([topic, score], index) => ({
             name: topic,
-            score: 50 - (index * 5),  // Arbitrary score for display purposes
+            score: typeof score === 'number' ? score : 50 - (index * 5), // Use score from object or fallback
             fill: topicColors.low
           }));
           setWeakTopicsData(topicItems);
@@ -292,10 +292,24 @@ const Dashboard = () => {
             variants={containerVariants}
           >
           <motion.div variants={itemVariants} className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Learning Dashboard</h1>
-            <p className="text-gray-600 dark:text-gray-300">
-              Track your progress and get AI-powered insights
-            </p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-3xl font-bold mb-2">Learning Dashboard</h1>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Track your progress and get AI-powered insights
+                </p>
+              </div>
+              
+              <motion.button
+                variants={itemVariants}
+                onClick={() => navigate('/dashboard/quiz-stats')}
+                className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+              >
+                <BarChart2 className="h-5 w-5 mr-2" />
+                <span>Quiz Statistics</span>
+                <ExternalLink className="h-4 w-4 ml-1" />
+              </motion.button>
+            </div>
           </motion.div>
           
           {/* AI Insights Card */}
@@ -355,7 +369,7 @@ const Dashboard = () => {
                 
                 <div className="p-4 bg-card-gradient rounded-lg mb-4">
                   <p className="text-gray-800 dark:text-gray-200">
-                    <strong>Improvement needed:</strong> You need improvement in {dashboardData?.weak_topics?.slice(0, 2).join(' and ') || 'key areas'}. Focus on these subjects for better results.
+                    <strong>Improvement needed:</strong> You need improvement in {Object.keys(dashboardData?.weak_topics || {}).slice(0, 2).join(' and ') || 'key areas'}. Focus on these subjects for better results.
                   </p>
                   <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center">
                     <AlertCircle className="h-3 w-3 mr-1" />
@@ -364,10 +378,10 @@ const Dashboard = () => {
                 </div>
                 
                 <div className="flex flex-wrap gap-2">
-                  {dashboardData?.weak_topics?.map((topic, index) => (
+                  {Object.keys(dashboardData?.weak_topics || {}).map((topic, index) => (
                     <span key={index} className="bg-primary/10 text-primary text-xs px-3 py-1 rounded-full">{topic}</span>
                   ))}
-                  {dashboardData?.weak_topics?.length ? (
+                  {Object.keys(dashboardData?.weak_topics || {}).length ? (
                     <span className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-3 py-1 rounded-full">Review Fundamentals</span>
                   ) : null}
                 </div>
@@ -537,26 +551,26 @@ const Dashboard = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {dashboardData?.weak_topics && dashboardData.weak_topics.length > 0 ? (
+                      {dashboardData?.weak_topics && Object.keys(dashboardData.weak_topics).length > 0 ? (
                         // Generate schedule based on weak topics
                         [
                           { 
                             day: "Monday", 
-                            subjects: [dashboardData.weak_topics[0], dashboardData.weak_topics.length > 1 ? dashboardData.weak_topics[1] : "Review"], 
+                            subjects: [Object.keys(dashboardData.weak_topics)[0], Object.keys(dashboardData.weak_topics).length > 1 ? Object.keys(dashboardData.weak_topics)[1] : "Review"], 
                             duration: "1.5 hours" 
                           },
                           { 
                             day: "Wednesday", 
                             subjects: [
-                              `${dashboardData.weak_topics[0]} Practice`, 
-                              dashboardData.weak_topics.length > 1 ? `${dashboardData.weak_topics[1]} Exercises` : "Problem Solving"
+                              `${Object.keys(dashboardData.weak_topics)[0]} Practice`, 
+                              Object.keys(dashboardData.weak_topics).length > 1 ? `${Object.keys(dashboardData.weak_topics)[1]} Exercises` : "Problem Solving"
                             ], 
                             duration: "2 hours" 
                           },
                           { 
                             day: "Friday", 
                             subjects: [
-                              `${dashboardData.weak_topics[0]} Review`, 
+                              `${Object.keys(dashboardData.weak_topics)[0]} Review`, 
                               "Assessment Preparation"
                             ], 
                             duration: "1 hour" 

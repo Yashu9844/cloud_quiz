@@ -23,6 +23,7 @@ export interface User {
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  isLoading: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   register: (username: string, email: string, password: string) => Promise<boolean>;
@@ -33,6 +34,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
+  isLoading: false,
   user: null,
   login: async () => false,
   register: async () => false,
@@ -43,6 +45,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
@@ -107,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check for token and user data on initial load
   useEffect(() => {
+    setIsLoading(true);
     try {
       const storedToken = localStorage.getItem(TOKEN_KEY);
       const storedUserData = localStorage.getItem(USER_KEY);
@@ -137,10 +141,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error initializing auth state:', error);
       clearAuthState();
+    } finally {
+      setIsLoading(false);
     }
   }, [validateAuthState, clearAuthState]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
     try {
       console.log('Attempting login for:', email);
       
@@ -177,10 +184,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Login error:', error);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const register = async (username: string, email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
     try {
       console.log('Attempting registration for:', username, email);
       
@@ -215,12 +225,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Registration error:', error);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const logout = useCallback(() => {
+    setIsLoading(true);
     clearAuthState();
     console.log('Logged out - token and user data removed');
+    setIsLoading(false);
   }, [clearAuthState]);
   const getToken = useCallback(() => {
     // First try from state, then from localStorage
@@ -294,7 +308,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ 
-      isAuthenticated, 
+      isAuthenticated,
+      isLoading, 
       user,
       login, 
       register, 

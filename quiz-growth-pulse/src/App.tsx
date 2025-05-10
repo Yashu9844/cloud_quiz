@@ -1,22 +1,22 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { 
-  BrowserRouter, 
-  Routes, 
-  Route,
-  createBrowserRouter,
-  RouterProvider
-} from "react-router-dom";
-import { ToastContainer, showToast } from './components/ui/toast';
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  BrowserRouter,
+  Route,
+  Routes
+} from "react-router-dom";
 import ProtectedRoute from './components/ProtectedRoute';
+import { ToastContainer } from './components/ui/toast';
 import { AuthProvider } from './contexts/AuthContext';
 
 // Pages and Components
+import Dashboard from "./components/Dashboard";
+import DashboardRoute from "./components/DashboardRoute";
+import QuizDashboard from "./components/QuizDashboard";
+import QuizInterface from "./components/QuizInterface";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Results from "./pages/Results";
-import QuizInterface from "./components/QuizInterface";
-import Dashboard from "./components/Dashboard";
 
 // Styles
 import './App.css';
@@ -60,9 +60,14 @@ const App = () => (
             {/* Protected Routes - Require Authentication */}
             <Route 
               path="/dashboard" 
+              element={<DashboardRoute />} 
+            />
+            
+            <Route 
+              path="/dashboard/quiz-stats" 
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <QuizDashboard />
                 </ProtectedRoute>
               } 
             />

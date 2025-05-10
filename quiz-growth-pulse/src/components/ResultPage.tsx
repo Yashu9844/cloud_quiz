@@ -1,8 +1,10 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, RotateCcw, Eye, Award, Share2, Loader2 } from "lucide-react";
+import { CheckCircle2, RotateCcw, Eye, Award, Share2, Loader2, BarChart } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { showToast } from "./ui/toast";
 
 // Badge interface based on backend model
 interface Badge {
@@ -54,10 +56,12 @@ const ResultPage = ({
   const [badge, setBadge] = useState<Badge | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
   
   // Router state and navigation
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   
   // Get quiz data from props or location state
   const score = location.state?.score ?? propScore;
@@ -152,6 +156,69 @@ const ResultPage = ({
       // For now, just show an alert
       alert("Review functionality would go here");
     }
+  };
+
+  // Handle navigation to dashboard with auth check
+  const handleDashboardNavigation = () => {
+    // Prevent multiple clicks
+    if (isNavigating) return;
+    
+    // Check if we're loading auth or badge data
+    if (isAuthLoading) {
+      showToast({
+        message: "Please wait while we verify your authentication...",
+        type: "info",
+        duration: 3000
+      });
+      return;
+    }
+    
+    if (isLoading) {
+      showToast({
+        message: "Please wait while we load your results...",
+        type: "info",
+        duration: 3000
+      });
+      return;
+    }
+
+    // Save quiz results for after authentication if needed
+    if (score !== undefined && totalQuestions > 0) {
+      try {
+        // Store quiz result info to be retrieved after auth
+        localStorage.setItem('pendingQuizResults', JSON.stringify({
+          score,
+          totalQuestions,
+          percentage,
+          timeTaken,
+          categoryId,
+          categoryName
+        }));
+      } catch (error) {
+        console.error('Failed to store quiz results:', error);
+      }
+    }
+    
+    // Set navigating state to provide feedback
+    setIsNavigating(true);
+    
+    showToast({
+      message: isAuthenticated 
+        ? "Loading your dashboard..." 
+        : "Please sign in to view your dashboard",
+      type: isAuthenticated ? "info" : "warning",
+      duration: 2000
+    });
+    
+    // If not authenticated, store the intended destination
+    if (!isAuthenticated) {
+      localStorage.setItem('pendingDashboardRedirect', '/dashboard');
+    }
+    
+    // Navigate to dashboard (which will handle auth state)
+    setTimeout(() => {
+      navigate('/dashboard');
+    }, 500);
   };
   
   const confettiColors = ['#9b87f5', '#6EDCD9', '#FFC107', '#FF5722'];
@@ -276,6 +343,23 @@ const ResultPage = ({
           >
             <Eye className="mr-2 h-4 w-4" />
             Review Answers
+          </button>
+          <button 
+            onClick={handleDashboardNavigation}
+            className="btn-secondary flex items-center justify-center"
+            disabled={isNavigating || isAuthLoading}
+          >
+            {isNavigating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <BarChart className="mr-2 h-4 w-4" />
+                View Dashboard
+              </>
+            )}
           </button>
           <button 
             onClick={handleRetry}

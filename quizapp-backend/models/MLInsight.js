@@ -20,6 +20,10 @@ const MLInsightSchema = new mongoose.Schema({
     type: [String],
     default: [],
   },
+  confidence_scores: {
+    type: Object,
+    default: {},
+  },
   topic_performance: {
     type: Map,
     of: Number,  // Topic name -> performance score (0-100)

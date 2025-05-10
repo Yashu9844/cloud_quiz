@@ -4,7 +4,7 @@ import { Clock, ChevronRight, AlertCircle, Loader2, BookOpen, Code, Calculator, 
 import { useNavigate, useLocation } from "react-router-dom";
 import SignInModal from "@/components/SignInModal";
 import SignUpModal from "@/components/SignUpModal";
-import { createAttempt, submitAnswer } from "@/services/attempt";
+import { createAttempt, createInitialAttempt, submitAnswer } from "@/services/attempt";
 
 // Quiz model based on backend
 interface Quiz {
@@ -180,12 +180,34 @@ const QuizInterface = () => {
         
         // Create a new quiz attempt using the service
         try {
-          console.log('Creating new quiz attempt for quiz:', quiz.id);
-          const attempt = await createAttempt(quiz.id);
-          console.log('Quiz attempt created:', attempt);
+          console.log('Initializing new quiz attempt for quiz:', quiz.id);
+          
+          if (!isValidUUID(quiz.id)) {
+            console.warn('Quiz ID is not a valid UUID format:', quiz.id);
+          }
+          
+          // Use createInitialAttempt which only requires the quiz ID
+          const attempt = await createInitialAttempt(quiz.id);
+          console.log('Quiz attempt initialized successfully:', { 
+            attemptId: attempt.id,
+            quizId: attempt.quiz_id,
+            status: attempt.status,
+            timestamp: new Date().toISOString()
+          });
+          
           setCurrentAttemptId(attempt.id);
         } catch (attemptError) {
-          console.error('Error creating quiz attempt:', attemptError);
+          console.error('Error initializing quiz attempt:', attemptError);
+          
+          // Log more details about the error
+          if (attemptError instanceof Error) {
+            console.error('Error details:', {
+              message: attemptError.message,
+              stack: attemptError.stack,
+              quizId: quiz.id
+            });
+          }
+          
           // Continue with quiz even if attempt creation fails
           // This way user can still take the quiz even if the backend has issues
         }
@@ -972,54 +994,153 @@ const QuizInterface = () => {
       </div>
     );
   };
+  // Helper function to check if an answer is correct
+  const isAnswerCorrect = (question: QuizQuestion, selectedAnswers: string[]): boolean => {
+    if (question.question_type === 'MCQ') {
+      return question.correct_answer.includes(selectedAnswers[0]);
+    } else if (question.question_type === 'MULTI_SELECT') {
+      const selectedSet = new Set(selectedAnswers);
+      const correctSet = new Set(question.correct_answer);
+      
+      return selectedSet.size === correctSet.size && 
+             selectedAnswers.every(answer => correctSet.has(answer));
+    }
+    return false;
+  };
   
-  // Handle quiz completion - navigate to results
+  // Handle quiz completion - create final attempt and navigate to results
   useEffect(() => {
     if (status === 'completed' && !isNavigating && !isSubmitting) {
       const timeTaken = quizStartTime ? Math.floor((Date.now() - quizStartTime) / 1000) : 300 - timeLeft;
       
       // Prevent multiple navigations
       setIsNavigating(true);
+      setIsSubmitting(true);
       
       // Get quiz details
       const quizTitle = selectedQuiz?.title;
       const quizTopic = selectedQuiz?.topic;
+      const quizId = selectedQuiz?.id;
       
       // Calculate correct answers
       let correctAnswers = 0;
       userAnswers.forEach((answers, index) => {
         if (index < quizData.length) {
-          const question = quizData[index];
-          
-          if (question.question_type === 'MCQ') {
-            if (question.correct_answer.includes(answers[0])) {
-              correctAnswers++;
-            }
-          } else if (question.question_type === 'MULTI_SELECT') {
-            const selectedSet = new Set(answers);
-            const correctSet = new Set(question.correct_answer);
-            
-            if (selectedSet.size === correctSet.size && 
-                answers.every(answer => correctSet.has(answer))) {
-              correctAnswers++;
-            }
+          if (isAnswerCorrect(quizData[index], answers)) {
+            correctAnswers++;
           }
         }
       });
       
-      // Navigate to results with state
-      navigate("/results", {
-        state: {
-          score: correctAnswers, // Use accurately calculated score
-          totalQuestions: quizData.length,
-          timeTaken,
-          quizId: selectedQuiz?.id,
-          quizTitle: quizTitle,
-          quizTopic: quizTopic
-        }
+      // Calculate final score as percentage
+      const scorePercentage = Math.round((correctAnswers / quizData.length) * 100);
+      
+      console.log('Quiz completed. Preparing final data:', {
+        quizId,
+        correctAnswers,
+        totalQuestions: quizData.length,
+        scorePercentage,
+        timeTaken
       });
+      
+      // Create array of answers in the format expected by the backend
+      const formattedAnswers = quizData.map((question, index) => {
+        const selectedAnswerArray = userAnswers[index] || [];
+        return {
+          question_id: question.id,
+          selected_answer: selectedAnswerArray,
+          // is_correct property is optional and will be re-computed on the server
+          is_correct: isAnswerCorrect(question, selectedAnswerArray)
+        };
+      });
+      
+      // Create the final attempt with all data
+      const createFinalAttempt = async () => {
+        try {
+          // Validate quiz ID
+          if (!quizId) {
+            throw new Error('Missing quiz ID for final attempt creation');
+          }
+          
+          if (!isValidUUID(quizId)) {
+            console.warn(`Quiz ID is not in UUID format: ${quizId}`);
+            // Continue anyway since the backend might accept other formats
+          }
+          
+          // Ensure we have at least one answer
+          if (formattedAnswers.length === 0) {
+            throw new Error('No answers to submit');
+          }
+          
+          // Check for any missing question IDs
+          const invalidQuestions = formattedAnswers.filter(a => !a.question_id || !isValidUUID(a.question_id));
+          if (invalidQuestions.length > 0) {
+            console.warn(`Found ${invalidQuestions.length} questions with invalid IDs`);
+          }
+          
+          console.log('Creating final quiz attempt with data:', {
+            quiz_id: quizId,
+            score: scorePercentage,
+            total_questions: quizData.length,
+            correct_answers: correctAnswers,
+            time_taken: timeTaken,
+            answers_count: formattedAnswers.length
+          });
+          
+          // Create the attempt with validated data
+          await createAttempt({
+            quiz_id: quizId,
+            score: scorePercentage,
+            total_questions: quizData.length,
+            correct_answers: correctAnswers,
+            time_taken: timeTaken,
+            answers: formattedAnswers
+          });
+          
+          console.log('Final quiz attempt created successfully');
+        } catch (error) {
+          console.error('Error creating final quiz attempt:', error);
+          
+          // Log detailed error information
+          if (error instanceof Error) {
+            console.error('Error details:', {
+              message: error.message,
+              stack: error.stack,
+              quizId,
+              answerCount: formattedAnswers.length,
+              sampleQuestionId: formattedAnswers.length > 0 ? formattedAnswers[0].question_id : 'No answers',
+              timestamp: new Date().toISOString()
+            });
+            
+            // Attempt to extract more details if it's an API error
+            if ('response' in (error as any)) {
+              const apiError = error as any;
+              console.error('API Error Response:', {
+                status: apiError.response?.status,
+                statusText: apiError.response?.statusText,
+                data: apiError.response?.data,
+                headers: apiError.response?.headers
+              });
+            }
+          }
+        } finally {
+          // Navigate to results with state regardless of attempt creation success
+          navigate("/results", {
+            state: {
+              score: correctAnswers,
+              totalQuestions: quizData.length,
+              timeTaken,
+              categoryId: quizId,
+              categoryName: quizTitle || quizTopic
+            }
+          });
+        }
+      };
+      
+      // Execute the async function
+      createFinalAttempt();
     }
-  }, [status, navigate, score, quizData.length, quizStartTime, timeLeft, selectedQuiz, isNavigating, isSubmitting]);
+  }, [status, navigate, quizData, userAnswers, quizStartTime, timeLeft, selectedQuiz, isNavigating, isSubmitting]);
   
   // Main render method - conditionally render based on status
   return (

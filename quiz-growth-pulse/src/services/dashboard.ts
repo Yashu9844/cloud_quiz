@@ -26,8 +26,9 @@ export interface TopicProficiency {
 }
 
 export interface DashboardData {
-  weak_topics: string[];
-  strong_topics: string[];
+  weak_topics: Record<string, any>;
+  strong_topics: Record<string, any>;
+  confidence_scores: Record<string, any>;
   topic_proficiency: TopicProficiency;
   performance_history: PerformanceHistoryItem[];
   badges: BadgeAchievement[];
