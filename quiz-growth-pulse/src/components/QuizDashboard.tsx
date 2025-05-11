@@ -429,7 +429,7 @@ const QuizDashboard: React.FC = () => {
             </div>
             
             <motion.button
-              onClick={() => navigate('/quizzes')}
+              onClick={() => navigate('/quiz')}
               className="mt-4 md:mt-0 flex items-center px-6 py-3 bg-primary text-white rounded-lg shadow-lg hover:bg-primary/90 transition-all"
               initial="initial"
               animate="pulse"
@@ -471,7 +471,7 @@ const QuizDashboard: React.FC = () => {
                 <p className="text-amber-700 dark:text-amber-300">{error}</p>
                 
                 <motion.button
-                  onClick={() => navigate('/quizzes')}
+                  onClick={() => navigate('/quiz')}
                   className="mt-6 flex items-center px-6 py-3 bg-primary text-white rounded-lg shadow hover:shadow-lg hover:bg-primary/90 transition-all"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -522,7 +522,7 @@ const QuizDashboard: React.FC = () => {
               
               <div className="mt-6 flex justify-center">
                 <motion.button
-                  onClick={() => navigate('/quizzes')}
+                  onClick={() => navigate('/quiz')}
                   className="group flex items-center px-6 py-3 bg-gradient-to-r from-primary to-purple-600 text-white rounded-lg shadow-lg hover:shadow-xl transition-all"
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}

@@ -87,12 +87,14 @@ export const generateUserInsights = async (userId) => {
     });
     
     // Determine weak and strong topics
-    const weakTopics = {};
-    const strongTopics = {};
+    const weakTopics = [];
+    const strongTopics = [];
     const confidenceScores = {};
+    const performanceMap = new Map();
     
     Object.entries(topicStats).forEach(([topic, stats]) => {
       const score = Math.round((stats.correct / stats.total) * 100);
+      performanceMap.set(topic, score);
       
       // Calculate confidence score based on consistency and recency
       const attempts = topicAttempts[topic];
@@ -113,11 +115,11 @@ export const generateUserInsights = async (userId) => {
       
       confidenceScores[topic] = confidenceScore;
       
-      // Classify as weak or strong
+      // Classify as weak or strong (store only topic names in arrays)
       if (score < 60) {
-        weakTopics[topic] = score;
+        weakTopics.push(topic);
       } else if (score >= 80) {
-        strongTopics[topic] = score;
+        strongTopics.push(topic);
       }
     });
     
@@ -132,7 +134,7 @@ export const generateUserInsights = async (userId) => {
     mlInsight.weak_topics = weakTopics;
     mlInsight.strong_topics = strongTopics;
     mlInsight.confidence_scores = confidenceScores;
-    mlInsight.topic_performance = topicPerformance;
+    mlInsight.topic_performance = performanceMap;
     mlInsight.last_updated = new Date();
     
     await mlInsight.save();

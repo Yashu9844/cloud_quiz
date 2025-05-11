@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -110,7 +112,7 @@
 
 @layer components {
   .glass-card {
-    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-glass;
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-lg;
   }
   
   .dark .glass-card {
@@ -118,19 +120,20 @@
   }
   
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-mint;
+    @apply bg-clip-text text-transparent;
+    background: linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
   }
   
   .btn-primary {
-    @apply bg-primary hover:bg-primary-dark text-white font-medium py-2 px-6 rounded-full transition-all duration-200;
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 font-medium py-2 px-6 rounded-full transition-all duration-200;
   }
   
   .btn-secondary {
-    @apply bg-secondary hover:bg-secondary-dark text-white font-medium py-2 px-6 rounded-full transition-all duration-200;
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/90 font-medium py-2 px-6 rounded-full transition-all duration-200;
   }
   
   .btn-outline {
-    @apply border-2 border-primary text-primary hover:bg-primary hover:text-white font-medium py-2 px-6 rounded-full transition-all duration-200;
+    @apply border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-medium py-2 px-6 rounded-full transition-all duration-200;
   }
   
   .quiz-option {
@@ -138,7 +141,7 @@
   }
   
   .quiz-option-selected {
-    @apply border-primary-light bg-primary/10;
+    @apply border-primary bg-primary/10;
   }
   
   .quiz-option-correct {
@@ -150,11 +153,11 @@
   }
 
   .feature-card {
-    @apply bg-white rounded-xl p-6 shadow-card hover:shadow-lg transition-all duration-300 border border-gray-100;
+    @apply bg-card text-card-foreground rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-300 border;
   }
   
   .dark .feature-card {
-    @apply bg-gray-800/50 border-gray-700;
+    @apply bg-card/50 border-border;
   }
   
   .icon-container {

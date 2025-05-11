@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./config/db.js";
+import mongoose from "mongoose";
 
 import authRoutes from "./routes/auth.js";
 import quizAttemptRoutes from "./routes/quizAttemptRoutes.js";
@@ -10,6 +11,23 @@ import questionRoutes from './routes/questionRoutes.js';
 import badgeRoutes from "./routes/badgeRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 
+// Global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Graceful shutdown
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+});
+
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled Rejection:', error);
+  // Graceful shutdown
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+});
+
 dotenv.config();
 connectDB();
 
@@ -17,7 +35,7 @@ const app = express();
 
 // Configure CORS for frontend application
 const corsOptions = {
-  origin: 'http://localhost:3000', // Allow only the frontend app
+  origin: process.env.CORS_ORIGIN.split(','), // Use the comma-separated list from .env
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed methods
   allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
   credentials: true, // Allow cookies
@@ -49,4 +67,31 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 8000; // Changed to 8000 as per requirements
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Handle server errors
+server.on('error', (error) => {
+  console.error('Server error:', error);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully');
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB connection closed.');
+      process.exit(0);
+    });
+  });
+});
+
+// SIGINT handler (for Ctrl+C)
+process.on('SIGINT', () => {
+  console.log('SIGINT received. Shutting down gracefully');
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB connection closed.');
+      process.exit(0);
+    });
+  });
+});

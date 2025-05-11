@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
@@ -9,47 +8,6 @@ import { TrendingUp, BookOpen, Target, Calendar, BrainCircuit, AlertCircle, Load
 import { fetchDashboardData, DashboardData } from "../services/dashboard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-
-// Error boundary for catching auth-related errors
-class AuthErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; errorMessage: string }
-> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, errorMessage: '' };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    // Update state so the next render will show the fallback UI
-    return { hasError: true, errorMessage: error.message };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log the error to console
-    console.error('Dashboard auth error boundary caught error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      // Render fallback UI for auth errors
-      return (
-        <div className="p-6 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 text-center">
-          <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-2">Authentication Error</h3>
-          <p className="text-red-600 dark:text-red-300 mb-4">{this.state.errorMessage || 'An authentication error occurred.'}</p>
-          <button 
-            className="px-4 py-2 bg-primary text-white rounded-md"
-            onClick={() => window.location.reload()}
-          >
-            Refresh Page
-          </button>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
 
 // Topic colors for visualization
 const topicColors = {
@@ -73,6 +31,7 @@ const formatDate = (dateString: string) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+// Main Dashboard Component
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("performance");
   const [loading, setLoading] = useState(true);
@@ -280,46 +239,36 @@ const Dashboard = () => {
   }, [getCurrentUser, isAuthenticated, retryCount, authRetryCount]);
 
   return (
-    <AuthErrorBoundary>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar is in the Navigation component already */}
-          
-          <motion.div 
-            className="flex-1"
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-          >
-          <motion.div variants={itemVariants} className="mb-8">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">Learning Dashboard</h1>
-                <p className="text-gray-600 dark:text-gray-300">
-                  Track your progress and get AI-powered insights
-                </p>
-              </div>
-              
-              <motion.button
-                variants={itemVariants}
-                onClick={() => navigate('/dashboard/quiz-stats')}
-                className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
-              >
-                <BarChart2 className="h-5 w-5 mr-2" />
-                <span>Quiz Statistics</span>
-                <ExternalLink className="h-4 w-4 ml-1" />
-              </motion.button>
+    <div className="space-y-8 p-4 md:p-6">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Learning Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">
+            Track your progress and get AI-powered insights
+          </p>
+        </div>
+        
+        <motion.button
+          onClick={() => navigate('/dashboard/quiz-stats')}
+          className="flex items-center px-6 py-3 bg-primary text-white rounded-lg shadow-md hover:shadow-lg hover:bg-primary/90 transition-all"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <BarChart2 className="h-5 w-5 mr-2" />
+          <span className="font-medium">Quiz Statistics</span>
+          <ExternalLink className="h-4 w-4 ml-1" />
+        </motion.button>
+      </div>
+      
+      {/* Loading and Error States */}
+      {loading ? (
+        <div className="flex flex-col justify-center items-center min-h-[400px] bg-white dark:bg-gray-800 rounded-xl shadow-md p-8 border border-gray-100 dark:border-gray-700">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+              <span className="text-gray-600 dark:text-gray-300">Loading dashboard data...</span>
             </div>
-          </motion.div>
-          
-          {/* AI Insights Card */}
-          {loading ? (
-            <motion.div variants={itemVariants} className="flex justify-center items-center py-20">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
-              <span className="ml-2 text-gray-600 dark:text-gray-300">Loading dashboard data...</span>
-            </motion.div>
           ) : authError ? (
-            <motion.div variants={itemVariants} className="bg-amber-50 dark:bg-amber-900/20 p-8 rounded-lg border border-amber-200 dark:border-amber-800 text-center">
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-8 rounded-xl border border-amber-200 dark:border-amber-800 text-center shadow-md">
               <div className="mx-auto mb-4 bg-amber-100 dark:bg-amber-800/30 p-3 rounded-full inline-flex">
                 <LogIn className="h-8 w-8 text-amber-600 dark:text-amber-400" />
               </div>
@@ -327,99 +276,109 @@ const Dashboard = () => {
               <p className="text-amber-700 dark:text-amber-300 mb-6">{error || "Please log in to view your dashboard"}</p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button 
-                  className="px-4 py-2 bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-200 rounded-md hover:bg-amber-200 dark:hover:bg-amber-700 transition-colors"
+                  className="px-5 py-2.5 bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-200 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-700 transition-colors"
                   onClick={() => navigate('/')}
                 >
                   Go to Home Page
                 </button>
                 <button 
-                  className="px-4 py-2 bg-primary/90 text-white rounded-md hover:bg-primary transition-colors"
+                  className="px-5 py-2.5 bg-primary text-white rounded-lg shadow-md hover:shadow-lg hover:bg-primary/90 transition-all"
                   onClick={() => window.location.reload()}
                 >
                   Try Again
                 </button>
               </div>
-            </motion.div>
-          ) : error ? (
-            <motion.div variants={itemVariants} className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg border border-red-200 dark:border-red-800">
-              <h3 className="text-red-600 dark:text-red-400 font-medium text-lg mb-2">Error Loading Dashboard</h3>
-              <p className="text-red-700 dark:text-red-300">{error}</p>
-              <button 
-                className="mt-4 px-4 py-2 bg-red-100 dark:bg-red-800 text-red-600 dark:text-red-200 rounded-md hover:bg-red-200 dark:hover:bg-red-700"
-                onClick={() => window.location.reload()}
-              >
-                Retry
-              </button>
-            </motion.div>
-          ) : (
-            <>
-              <motion.div 
-                variants={itemVariants}
-                className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-card mb-8 border border-gray-100 dark:border-gray-700"
-              >
-                <div className="flex items-start mb-4">
-                  <div className="bg-primary/10 p-2 rounded-lg mr-4">
-                    <BrainCircuit className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold mb-1">AI-Driven Insights</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Based on your recent quiz performance</p>
-                  </div>
-                </div>
-                
-                <div className="p-4 bg-card-gradient rounded-lg mb-4">
-                  <p className="text-gray-800 dark:text-gray-200">
-                    <strong>Improvement needed:</strong> You need improvement in {Object.keys(dashboardData?.weak_topics || {}).slice(0, 2).join(' and ') || 'key areas'}. Focus on these subjects for better results.
-                  </p>
-                  <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    Last updated: {dashboardData?.insight_last_updated ? new Date(dashboardData.insight_last_updated).toLocaleDateString() : 'Recently'}
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-2">
-                  {Object.keys(dashboardData?.weak_topics || {}).map((topic, index) => (
-                    <span key={index} className="bg-primary/10 text-primary text-xs px-3 py-1 rounded-full">{topic}</span>
-                  ))}
-                  {Object.keys(dashboardData?.weak_topics || {}).length ? (
-                    <span className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs px-3 py-1 rounded-full">Review Fundamentals</span>
-                  ) : null}
-                </div>
-              </motion.div>
-            </>
-          )}
-          
-          {/* Tabs for different charts */}
-          <motion.div variants={itemVariants}>
-            <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-              <nav className="flex space-x-8 -mb-px">
-                {[
-                  { id: "performance", label: "Performance", icon: TrendingUp },
-                  { id: "topics", label: "Weak Topics", icon: Target },
-                  { id: "mastery", label: "Mastery Level", icon: BookOpen },
-                  { id: "schedule", label: "Schedule", icon: Calendar }
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`
-                      flex items-center py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap
-                      ${activeTab === tab.id 
-                        ? "border-primary text-primary" 
-                        : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}
-                    `}
-                  >
-                    <tab.icon className="mr-2 h-4 w-4" />
-                    {tab.label}
-                  </button>
-                ))}
-              </nav>
             </div>
-            
-            {/* Tab content */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-card p-6 border border-gray-100 dark:border-gray-700">
-              {activeTab === "performance" && (
-                <div className="animate-fade-in">
+          ) : error ? (
+            <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-xl border border-red-200 dark:border-red-800 shadow-md">
+              <div className="flex items-start">
+                <AlertCircle className="h-6 w-6 text-red-500 mt-0.5 mr-3" />
+                <div>
+                  <h3 className="text-lg font-semibold text-red-800 dark:text-red-400">Error Loading Dashboard</h3>
+                  <p className="text-red-600 dark:text-red-300 mt-1">{error}</p>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="mt-4 px-4 py-2 bg-red-100 dark:bg-red-800 text-red-600 dark:text-red-200 rounded-lg hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <motion.div 
+              className="grid gap-8"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              {/* Dashboard Content Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* AI Insights Card */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md border border-gray-100 dark:border-gray-700 lg:col-span-3">
+                  <div className="flex items-start mb-4">
+                    <div className="bg-primary/10 p-3 rounded-xl mr-4">
+                      <BrainCircuit className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">AI-Driven Insights</h2>
+                      <p className="text-gray-600 dark:text-gray-400 mt-1">Based on your recent quiz performance</p>
+                    </div>
+                  </div>
+                  
+                  <div className="p-5 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl mb-4">
+                    <p className="text-gray-800 dark:text-gray-200">
+                      <strong>Areas for improvement:</strong> Focus on {Object.keys(dashboardData?.weak_topics || {}).slice(0, 2).join(' and ') || 'key areas'} to enhance your results.
+                    </p>
+                    <div className="mt-3 text-sm text-gray-500 dark:text-gray-400 flex items-center">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      Last updated: {dashboardData?.insight_last_updated ? new Date(dashboardData.insight_last_updated).toLocaleDateString() : 'Recently'}
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {Object.keys(dashboardData?.weak_topics || {}).map((topic, index) => (
+                      <span 
+                        key={`topic-${index}`}
+                        className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm"
+                      >
+                        {topic}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tabs for different charts */}
+                <div className="lg:col-span-3">
+                  <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+                    <nav className="flex space-x-8 -mb-px">
+                      {[
+                        { id: "performance", label: "Performance", icon: TrendingUp },
+                        { id: "topics", label: "Weak Topics", icon: Target },
+                        { id: "mastery", label: "Mastery Level", icon: BookOpen },
+                        { id: "schedule", label: "Schedule", icon: Calendar }
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`
+                            flex items-center py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap
+                            ${activeTab === tab.id 
+                              ? "border-primary text-primary" 
+                              : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}
+                          `}
+                        >
+                          <tab.icon className="mr-2 h-4 w-4" />
+                          {tab.label}
+                        </button>
+                ))}
+                    </nav>
+                  </div>
+                  
+                  {/* Tab content */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 border border-gray-100 dark:border-gray-700">
+                    {activeTab === "performance" && (
+                      <div className="animate-fade-in">
                   <h3 className="text-lg font-semibold mb-4">Performance Progression</h3>
                   {loading ? (
                     <div className="h-80 flex justify-center items-center">
@@ -459,9 +418,9 @@ const Dashboard = () => {
                     </div>
                   )}
                 </div>
-              )}
-              
-              {activeTab === "topics" && (
+                    )}
+                    
+                    {activeTab === "topics" && (
                 <div className="animate-fade-in">
                   <h3 className="text-lg font-semibold mb-4">Weak Topics Analysis</h3>
                   {loading ? (
@@ -491,9 +450,9 @@ const Dashboard = () => {
                     </div>
                   )}
                 </div>
-              )}
-              
-              {activeTab === "mastery" && (
+                    )}
+                    
+                    {activeTab === "mastery" && (
                 <div className="animate-fade-in">
                   <h3 className="text-lg font-semibold mb-4">Current Level of Mastery</h3>
                   {loading ? (
@@ -535,9 +494,9 @@ const Dashboard = () => {
                     </div>
                   )}
                 </div>
-              )}
-              
-              {activeTab === "schedule" && (
+                    )}
+                    
+                    {activeTab === "schedule" && (
                 <div className="animate-fade-in">
                   <h3 className="text-lg font-semibold mb-4">Study Schedule</h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -615,13 +574,13 @@ const Dashboard = () => {
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
     </div>
-    </AuthErrorBoundary>
   );
 };
 

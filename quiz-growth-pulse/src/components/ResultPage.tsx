@@ -1,10 +1,15 @@
-
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { CheckCircle2, RotateCcw, Eye, Award, Share2, Loader2, BarChart } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
-import { showToast } from "./ui/toast";
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  Check, Clock, Trophy, Zap, Medal, AlertCircle, Award, 
+  RotateCcw, Eye, BarChart, Loader2
+} from 'lucide-react';
+import ShareResults from './ShareResults';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
+import { showToast } from './ui/toast';
+import { QuizAttempt } from '@/services/quiz';
 
 // Badge interface based on backend model
 interface Badge {
@@ -15,26 +20,28 @@ interface Badge {
   created_at: string;
 }
 
-// QuizAttempt interface based on backend model
-interface QuizAttempt {
-  id?: string;
-  quiz_id: string;
-  user_id?: string;
-  score: number;
-  total_questions: number;
-  correct_answers: number;
-  time_taken: number;
-  created_at?: string;
-}
-
+// Props interface for ResultPage component
 interface ResultPageProps {
-  score: number;
-  totalQuestions: number;
-  onRetry: () => void;
-  onReview: () => void;
-  timeTaken: number;
+  // Either pass direct quiz result values
+  score?: number;
+  totalQuestions?: number;
+  timeTaken?: number;
+  // Or pass a complete QuizAttempt object
+  attempt?: QuizAttempt;
+  // Optional callbacks and metadata
+  onRetry?: () => void;
+  onReview?: () => void;
   categoryId?: string;
   categoryName?: string;
+  // Loading state
+  isLoading?: boolean;
+}
+
+// Types for navigation state
+interface QuizNavigationState {
+  selectedCategory?: string;
+  quizId?: string;
+  fromResults?: boolean;
 }
 
 // API Base URL
@@ -43,42 +50,82 @@ const API_BASE_URL = '/api';
 // Helper function to get auth token
 const getAuthToken = () => localStorage.getItem('authToken');
 
-const ResultPage = ({
+const ResultPage: React.FC<ResultPageProps> = ({
   score: propScore,
   totalQuestions: propTotalQuestions,
+  timeTaken: propTimeTaken,
+  attempt,
   onRetry: propOnRetry,
   onReview: propOnReview,
-  timeTaken: propTimeTaken,
   categoryId: propCategoryId,
-  categoryName: propCategoryName
-}: ResultPageProps) => {
+  categoryName: propCategoryName,
+  isLoading: propIsLoading = false
+}) => {
+  // State
   const [showConfetti, setShowConfetti] = useState(false);
   const [badge, setBadge] = useState<Badge | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(propIsLoading);
   const [error, setError] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   
   // Router state and navigation
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   
-  // Get quiz data from props or location state
-  const score = location.state?.score ?? propScore;
-  const totalQuestions = location.state?.totalQuestions ?? propTotalQuestions;
-  const timeTaken = location.state?.timeTaken ?? propTimeTaken;
+  // Get quiz data from props, attempt object, or location state
+  const score = attempt?.score ?? location.state?.score ?? propScore ?? 0;
+  const totalQuestions = attempt?.total_questions ?? location.state?.totalQuestions ?? propTotalQuestions ?? 0;
+  const timeTaken = attempt?.time_taken ?? location.state?.timeTaken ?? propTimeTaken ?? 0;
   const categoryId = location.state?.categoryId ?? propCategoryId;
-  const categoryName = location.state?.categoryName ?? propCategoryName;
+  const categoryName = attempt?.quiz_title ?? location.state?.categoryName ?? propCategoryName;
+  const correctAnswers = attempt?.correct_answers ?? Math.round((score / totalQuestions) * 100 * totalQuestions / 100) ?? 0;
   
   // Calculate percentage score
-  const percentage = Math.round((score / totalQuestions) * 100);
+  const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
   
-  // Determine result type based on score
+  // Determine result type and performance level
   const resultType = percentage >= 80 ? 'high' : percentage >= 50 ? 'medium' : 'low';
   
-  // Badge level based on score - this is a fallback if API fails
+  const getPerformanceLevel = () => {
+    if (percentage >= 90) return { text: 'Excellent!', icon: Trophy, color: 'text-yellow-500' };
+    if (percentage >= 70) return { text: 'Great job!', icon: Medal, color: 'text-blue-500' };
+    if (percentage >= 50) return { text: 'Good effort!', icon: Award, color: 'text-green-500' };
+    return { text: 'Keep practicing!', icon: Zap, color: 'text-amber-500' };
+  };
+  
+  const performance = getPerformanceLevel();
+  const PerformanceIcon = performance.icon;
+  
+  // Badge level based on score - fallback if API fails
   const defaultBadgeLevel = percentage >= 80 ? 'Pro' : percentage >= 50 ? 'Intermediate' : 'Beginner';
   
+  // Format time taken (seconds to minutes and seconds)
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+  
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
+  
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { 
+      y: 0, 
+      opacity: 1, 
+      transition: { duration: 0.4 }
+    }
+  };
+
   // Fetch badge from backend based on score
   useEffect(() => {
     const fetchBadge = async () => {
@@ -130,6 +177,7 @@ const ResultPage = ({
     }
   }, [score, percentage, totalQuestions]);
   
+
   // Show confetti animation for high scores
   useEffect(() => {
     if (percentage >= 70) {
@@ -141,10 +189,31 @@ const ResultPage = ({
 
   // Handle retry - navigate back to quiz with same category
   const handleRetry = () => {
+    // Prevent double clicks
+    if (isRetrying) return;
+    
+    setIsRetrying(true);
+    
     if (propOnRetry) {
       propOnRetry();
     } else {
-      navigate("/", { state: { selectedCategory: categoryId } });
+      // Prepare navigation state that matches what QuizInterface expects
+      const navigationState: QuizNavigationState = {
+        selectedCategory: categoryId,
+        fromResults: true
+      };
+      
+      // Show feedback to user
+      showToast({
+        message: "Loading quiz...",
+        type: "info",
+        duration: 1500
+      });
+      
+      // Navigate to quiz page with correct state
+      setTimeout(() => {
+        navigate("/quiz", { state: navigationState });
+      }, 300);
     }
   };
 
@@ -232,27 +301,29 @@ const ResultPage = ({
             <motion.div
               key={i}
               className="absolute w-2 h-2 rounded-full"
-              style={{
-                top: '-10px',
-                left: `${Math.random() * 100}%`,
-                backgroundColor: confettiColors[Math.floor(Math.random() * confettiColors.length)]
-              }}
+              style={
+          {
+            top: '-10px',
+            left: `${Math.random() * 100}%`,
+            backgroundColor: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+          } as React.CSSProperties
+              }
               initial={{ 
-                scale: Math.random() * 0.5 + 0.5, 
-                opacity: 1, 
-                y: 0, 
-                x: 0, 
-                rotate: 0 
+          scale: Math.random() * 0.5 + 0.5, 
+          opacity: 1, 
+          y: 0, 
+          x: 0, 
+          rotate: 0 
               }}
               animate={{ 
-                y: window.innerHeight,
-                x: (Math.random() - 0.5) * 200, 
-                rotate: Math.random() * 360, 
-                opacity: 0 
+          y: window.innerHeight,
+          x: (Math.random() - 0.5) * 200, 
+          rotate: Math.random() * 360, 
+          opacity: 0 
               }}
               transition={{ 
-                duration: Math.random() * 2 + 1.5, 
-                ease: "easeOut" 
+          duration: Math.random() * 2 + 1.5, 
+          ease: "easeOut" 
               }}
             />
           ))}
@@ -295,7 +366,7 @@ const ResultPage = ({
             You answered {score} out of {totalQuestions} questions correctly.
           </p>
           <p className="text-gray-600 dark:text-gray-400 text-sm mt-2">
-            Time taken: {Math.floor(timeTaken / 60)}m {timeTaken % 60}s
+            Time taken: {formatTime(timeTaken)}
           </p>
         </div>
         
@@ -363,34 +434,32 @@ const ResultPage = ({
           </button>
           <button 
             onClick={handleRetry}
+            disabled={isRetrying}
             className="btn-primary flex items-center justify-center"
           >
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Try Again
+            {isRetrying ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Try Again
+              </>
+            )}
           </button>
         </div>
         
         {/* Share results */}
         <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
-          <button 
-            className="w-full flex items-center justify-center py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-primary transition-colors"
-            onClick={() => {
-              // Share functionality using Web Share API if available
-              if (navigator.share) {
-                navigator.share({
-                  title: 'My Quiz Results',
-                  text: `I scored ${percentage}% (${score}/${totalQuestions}) on the ${categoryName || 'quiz'}!`,
-                  url: window.location.href,
-                }).catch((error) => console.log('Error sharing', error));
-              } else {
-                // Fallback for browsers that don't support the Web Share API
-                alert(`Share your score: ${percentage}% (${score}/${totalQuestions}) on the ${categoryName || 'quiz'}!`);
-              }
-            }}
-          >
-            <Share2 className="mr-2 h-4 w-4" />
-            Share Results
-          </button>
+          <ShareResults 
+            score={score}
+            totalQuestions={totalQuestions}
+            quizTitle={categoryName || 'Quiz'}
+            attemptId={attempt?.id}
+            className="w-full flex items-center justify-center py-2 text-sm"
+          />
         </div>
       </motion.div>
     </div>

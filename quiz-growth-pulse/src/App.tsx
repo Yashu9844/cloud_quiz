@@ -8,6 +8,7 @@ import {
 import ProtectedRoute from './components/ProtectedRoute';
 import { ToastContainer } from './components/ui/toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { Layout } from './components/Layout';
 
 // Pages and Components
 import Dashboard from "./components/Dashboard";
@@ -52,37 +53,75 @@ const App = () => (
           }}
         >
           <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<Index />} />
-            <Route path="/quiz" element={<QuizInterface />} />
-            <Route path="/results" element={<Results />} />
+            {/* Public Routes - All wrapped with Layout */}
+            <Route path="/" element={<Layout><Index /></Layout>} />
             
-            {/* Protected Routes - Require Authentication */}
+            {/* Protected Routes - All wrapped with Layout */}
+            <Route 
+              path="/quiz" 
+              element={
+                <Layout>
+                  <ProtectedRoute>
+                    <QuizInterface />
+                  </ProtectedRoute>
+                </Layout>
+              } 
+            />
+            <Route 
+              path="/results" 
+              element={
+                <Layout>
+                  <ProtectedRoute>
+                    <Results />
+                  </ProtectedRoute>
+                </Layout>
+              } 
+            />
             <Route 
               path="/dashboard" 
-              element={<DashboardRoute />} 
+              element={
+                <Layout>
+                  <DashboardRoute />
+                </Layout>
+              } 
             />
             
             <Route 
               path="/dashboard/quiz-stats" 
               element={
-                <ProtectedRoute>
-                  <QuizDashboard />
-                </ProtectedRoute>
+                <Layout>
+                  <ProtectedRoute>
+                    <QuizDashboard />
+                  </ProtectedRoute>
+                </Layout>
               } 
             />
             
             <Route 
               path="/profile" 
               element={
-                <ProtectedRoute>
-                  <Index activeSection="profile" />
-                </ProtectedRoute>
+                <Layout>
+                  <ProtectedRoute>
+                    <Index activeSection="profile" />
+                  </ProtectedRoute>
+                </Layout>
               } 
             />
             
+            {/* Add route for individual result details */}
+            <Route 
+              path="/results/:id" 
+              element={
+                <Layout>
+                  <ProtectedRoute>
+                    <Results />
+                  </ProtectedRoute>
+                </Layout>
+              } 
+            />
+
             {/* 404 Route */}
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={<Layout><NotFound /></Layout>} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

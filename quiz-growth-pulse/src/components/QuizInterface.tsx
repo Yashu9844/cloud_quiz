@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Clock, ChevronRight, AlertCircle, Loader2, BookOpen, Code, Calculator, Brain, Dices } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import SignInModal from "@/components/SignInModal";
 import SignUpModal from "@/components/SignUpModal";
-import { createAttempt, createInitialAttempt, submitAnswer } from "@/services/attempt";
+import { submitQuizAttempt, createInitialAttempt, submitAnswer } from "@/services/attempt";
+import { API_BASE_URL } from "@/constants/endpoints";
 
 // Quiz model based on backend
 interface Quiz {
@@ -36,12 +37,14 @@ interface QuizApiResponse {
 
 // Quiz attempt data structure
 interface QuizAttempt {
-  quiz_id: string;
+  id: string; // Unique identifier for the quiz attempt
+  quiz_id?: string; // Identifier for the associated quiz (optional for some responses)
   user_id?: string; // Will be extracted from auth token on server side if not provided
-  score: number;
-  total_questions: number;
-  correct_answers: number;
-  time_taken: number;
+  score?: number;
+  total_questions?: number;
+  correct_answers?: number;
+  time_taken?: number;
+  status?: string; // Status of the attempt
 }
 
 // Quiz Status
@@ -54,11 +57,11 @@ const difficultyColors = {
   HARD: 'bg-red-100 text-red-700',
 };
 
-// Base URL for API
-const API_BASE_URL = 'http://localhost:8000/api'; // Include /api in base URL
+// Base URL for API is imported from endpoints.ts
 
 // Import the useAuth hook for authentication
 import { useAuth } from "@/contexts/AuthContext";
+import { showToast } from "./ui/toast";
 
 
 const QuizInterface = () => {
@@ -94,6 +97,24 @@ const QuizInterface = () => {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   
+  // Ref to prevent duplicate submissions
+  const submissionInProgress = useRef(false);
+  
+  // Reset states on mount and cleanup on unmount
+  useEffect(() => {
+    // Reset states on mount
+    setIsSubmitting(false);
+    setIsNavigating(false);
+    setIsAnswerSubmitting(false);
+    
+    return () => {
+      // Cleanup on unmount
+      setIsSubmitting(false);
+      setIsNavigating(false);
+      setIsAnswerSubmitting(false);
+    };
+  }, []);
+  
   const currentQuestion = quizData.length > 0 ? quizData[currentQuestionIndex] : null;
   const progress = quizData.length > 0 ? ((currentQuestionIndex + 1) / quizData.length) * 100 : 0;
   
@@ -121,7 +142,7 @@ const QuizInterface = () => {
       // Make the API request with proper error handling
       try {
         // API_BASE_URL already includes /api, so don't add it again
-        const url = `${API_BASE_URL}/question/quiz?quiz_id=${quiz.id}`;
+        const url = `${API_BASE_URL}/quiz/${quiz.id}/questions`;
         // Log detailed request information for debugging
         console.log('Making API request with:', {
           url: url,
@@ -188,14 +209,23 @@ const QuizInterface = () => {
           
           // Use createInitialAttempt which only requires the quiz ID
           const attempt = await createInitialAttempt(quiz.id);
+          
+          // Type guard to ensure attempt has required properties
+          if (!attempt || typeof attempt !== 'object' || !('id' in attempt)) {
+            throw new Error('Invalid attempt response format');
+          }
+          
           console.log('Quiz attempt initialized successfully:', { 
             attemptId: attempt.id,
-            quizId: attempt.quiz_id,
-            status: attempt.status,
+            quizId: attempt.quiz_id || quiz.id, // Fallback to quiz.id if quiz_id is missing
+            status: attempt.status || 'initialized',
             timestamp: new Date().toISOString()
           });
           
-          setCurrentAttemptId(attempt.id);
+          // Set the attempt ID only if it exists
+          if (attempt.id) {
+            setCurrentAttemptId(attempt.id);
+          }
         } catch (attemptError) {
           console.error('Error initializing quiz attempt:', attemptError);
           
@@ -812,7 +842,7 @@ const QuizInterface = () => {
               />
             </div>
             <p className="text-xs text-gray-400 mt-4">
-              Connecting to {API_BASE_URL}/question/quiz?quiz_id={selectedQuiz?.id}
+              Connecting to {API_BASE_URL}/quiz/{selectedQuiz?.id}/questions
             </p>
           </div>
         </div>
@@ -853,7 +883,7 @@ const QuizInterface = () => {
                   <p>Network Status: {navigator.onLine ? "Online" : "Offline"}</p>
                   <p>Time: {new Date().toISOString()}</p>
                   <p>Quiz ID: {selectedQuiz?.id || 'None selected'}</p>
-                  <p>API endpoint: {`${API_BASE_URL}/question/quiz`}</p>
+                  <p>API endpoint: {`${API_BASE_URL}/quiz`}</p>
                 </div>
               </div>
             )}
@@ -1008,139 +1038,153 @@ const QuizInterface = () => {
     return false;
   };
   
-  // Handle quiz completion - create final attempt and navigate to results
+  // Track the pending answer submissions
+  const [pendingSubmissions, setPendingSubmissions] = useState<{[questionId: string]: boolean}>({});
+  
+  // Handle quiz completion with a dedicated effect that runs only when status changes
+  // Handle quiz completion with a dedicated effect that runs only when status changes
   useEffect(() => {
-    if (status === 'completed' && !isNavigating && !isSubmitting) {
-      const timeTaken = quizStartTime ? Math.floor((Date.now() - quizStartTime) / 1000) : 300 - timeLeft;
-      
-      // Prevent multiple navigations
-      setIsNavigating(true);
+    // Early return if not completed
+    if (status !== 'completed') return;
+
+    // Use a ref to track submission within this effect instance
+    const currentEffectSubmission = { isSubmitting: false };
+
+    const submitQuiz = async () => {
+      // Check all submission flags
+      if (
+        currentEffectSubmission.isSubmitting || 
+        submissionInProgress.current || 
+        isNavigating || 
+        isSubmitting
+      ) {
+        console.log('Submission already in progress, skipping');
+        return;
+      }
+
+      // Set submission flags
+      currentEffectSubmission.isSubmitting = true;
+      submissionInProgress.current = true;
       setIsSubmitting(true);
-      
-      // Get quiz details
-      const quizTitle = selectedQuiz?.title;
-      const quizTopic = selectedQuiz?.topic;
-      const quizId = selectedQuiz?.id;
-      
-      // Calculate correct answers
-      let correctAnswers = 0;
-      userAnswers.forEach((answers, index) => {
-        if (index < quizData.length) {
-          if (isAnswerCorrect(quizData[index], answers)) {
-            correctAnswers++;
-          }
+      setIsNavigating(true);
+
+      try {
+        // Calculate time taken
+        const timeTaken = quizStartTime ? Math.floor((Date.now() - quizStartTime) / 1000) : 300 - timeLeft;
+
+        // Validate quiz details
+        if (!selectedQuiz?.id) {
+          throw new Error('Missing quiz ID during completion');
         }
-      });
-      
-      // Calculate final score as percentage
-      const scorePercentage = Math.round((correctAnswers / quizData.length) * 100);
-      
-      console.log('Quiz completed. Preparing final data:', {
-        quizId,
-        correctAnswers,
-        totalQuestions: quizData.length,
-        scorePercentage,
-        timeTaken
-      });
-      
-      // Create array of answers in the format expected by the backend
-      const formattedAnswers = quizData.map((question, index) => {
-        const selectedAnswerArray = userAnswers[index] || [];
-        return {
+
+        // Calculate final scores
+        const finalAnswers = quizData.map((question, index) => ({
           question_id: question.id,
-          selected_answer: selectedAnswerArray,
-          // is_correct property is optional and will be re-computed on the server
-          is_correct: isAnswerCorrect(question, selectedAnswerArray)
+          selected_answer: userAnswers[index] || [],
+          is_correct: isAnswerCorrect(question, userAnswers[index] || [])
+        }));
+
+        const correctAnswers = finalAnswers.filter(a => a.is_correct).length;
+        const scorePercentage = Math.round((correctAnswers / quizData.length) * 100);
+
+        console.log('Quiz completed. Preparing final data:', {
+          quizId: selectedQuiz.id,
+          correctAnswers,
+          totalQuestions: quizData.length,
+          scorePercentage,
+          timeTaken
+        });
+
+        // Create attempt after all answers are submitted
+        const attemptData = {
+          quiz_id: selectedQuiz.id,
+          score: scorePercentage,
+          total_questions: quizData.length,
+          correct_answers: correctAnswers,
+          time_taken: timeTaken,
+          answers: finalAnswers
         };
-      });
-      
-      // Create the final attempt with all data
-      const createFinalAttempt = async () => {
-        try {
-          // Validate quiz ID
-          if (!quizId) {
-            throw new Error('Missing quiz ID for final attempt creation');
+
+        console.log('Submitting final quiz attempt:', attemptData);
+        const result = await submitQuizAttempt(attemptData);
+        console.log('Quiz attempt created successfully:', result);
+
+        // Navigate to results
+        navigate("/results", {
+          state: {
+            score: correctAnswers,
+            totalQuestions: quizData.length,
+            timeTaken,
+            categoryId: selectedQuiz.id,
+            categoryName: selectedQuiz.title || selectedQuiz.topic,
+            attemptId: result && typeof result === 'object' && 'id' in result ? result.id : null,
+            answers: finalAnswers,
+            quizDetails: selectedQuiz,
+            percentage: scorePercentage
           }
-          
-          if (!isValidUUID(quizId)) {
-            console.warn(`Quiz ID is not in UUID format: ${quizId}`);
-            // Continue anyway since the backend might accept other formats
+        });
+
+      } catch (error) {
+        console.error('Error submitting quiz:', error);
+        
+        // Show error toast to user
+        showToast({
+          message: "There was an error submitting your quiz. We'll still show your results.",
+          type: "error",
+          duration: 5000
+        });
+        
+        // Calculate scores for error fallback
+        const calculatedScore = userAnswers.reduce((total, answers, index) => {
+          const question = quizData[index];
+          return total + (isAnswerCorrect(question, answers) ? 1 : 0);
+        }, 0);
+        
+        const timeTaken = quizStartTime ? Math.floor((Date.now() - quizStartTime) / 1000) : 300 - timeLeft;
+        
+        // Navigate with error state
+        navigate("/results", {
+          state: {
+            score: calculatedScore,
+            totalQuestions: quizData.length,
+            timeTaken,
+            categoryId: selectedQuiz?.id,
+            categoryName: selectedQuiz?.title || selectedQuiz?.topic,
+            error: true
           }
-          
-          // Ensure we have at least one answer
-          if (formattedAnswers.length === 0) {
-            throw new Error('No answers to submit');
-          }
-          
-          // Check for any missing question IDs
-          const invalidQuestions = formattedAnswers.filter(a => !a.question_id || !isValidUUID(a.question_id));
-          if (invalidQuestions.length > 0) {
-            console.warn(`Found ${invalidQuestions.length} questions with invalid IDs`);
-          }
-          
-          console.log('Creating final quiz attempt with data:', {
-            quiz_id: quizId,
-            score: scorePercentage,
-            total_questions: quizData.length,
-            correct_answers: correctAnswers,
-            time_taken: timeTaken,
-            answers_count: formattedAnswers.length
-          });
-          
-          // Create the attempt with validated data
-          await createAttempt({
-            quiz_id: quizId,
-            score: scorePercentage,
-            total_questions: quizData.length,
-            correct_answers: correctAnswers,
-            time_taken: timeTaken,
-            answers: formattedAnswers
-          });
-          
-          console.log('Final quiz attempt created successfully');
-        } catch (error) {
-          console.error('Error creating final quiz attempt:', error);
-          
-          // Log detailed error information
-          if (error instanceof Error) {
-            console.error('Error details:', {
-              message: error.message,
-              stack: error.stack,
-              quizId,
-              answerCount: formattedAnswers.length,
-              sampleQuestionId: formattedAnswers.length > 0 ? formattedAnswers[0].question_id : 'No answers',
-              timestamp: new Date().toISOString()
-            });
-            
-            // Attempt to extract more details if it's an API error
-            if ('response' in (error as any)) {
-              const apiError = error as any;
-              console.error('API Error Response:', {
-                status: apiError.response?.status,
-                statusText: apiError.response?.statusText,
-                data: apiError.response?.data,
-                headers: apiError.response?.headers
-              });
-            }
-          }
-        } finally {
-          // Navigate to results with state regardless of attempt creation success
-          navigate("/results", {
-            state: {
-              score: correctAnswers,
-              totalQuestions: quizData.length,
-              timeTaken,
-              categoryId: quizId,
-              categoryName: quizTitle || quizTopic
-            }
-          });
-        }
-      };
-      
-      // Execute the async function
-      createFinalAttempt();
-    }
-  }, [status, navigate, quizData, userAnswers, quizStartTime, timeLeft, selectedQuiz, isNavigating, isSubmitting]);
+        });
+      } finally {
+        // Reset all submission flags
+        currentEffectSubmission.isSubmitting = false;
+        submissionInProgress.current = false;
+        setIsSubmitting(false);
+        setIsNavigating(false);
+        setPendingSubmissions({});
+      }
+    };
+
+    // Execute submission
+    submitQuiz();
+
+    // Cleanup function
+    return () => {
+      currentEffectSubmission.isSubmitting = false;
+      submissionInProgress.current = false;
+      setIsSubmitting(false);
+      setIsNavigating(false);
+      setPendingSubmissions({});
+    };
+  }, [status]); // Only depend on status changes
+
+  // Cleanup effect to reset states when component unmounts
+  useEffect(() => {
+    return () => {
+      // Reset states when component unmounts
+      setIsSubmitting(false);
+      setIsNavigating(false);
+      setIsAnswerSubmitting(false);
+    };
+  }, []);
   
   // Main render method - conditionally render based on status
   return (

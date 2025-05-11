@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { API_BASE_URL, QUIZ_ENDPOINTS, AUTH_ENDPOINTS } from '../constants/endpoints';
 
 // Types for API responses
 export interface Quiz {
@@ -35,6 +36,47 @@ export interface QuizAttempt {
   time_taken: number;
 }
 
+export interface QuizAttemptDetails extends QuizAttempt {
+  id: string;
+  created_at: string;
+  quiz?: Quiz;
+  correct_percentage?: number;
+}
+
+export interface AttemptAnswer {
+  question_id: string;
+  selected_answer: string | string[];
+  is_correct?: boolean; // Optional as this might be determined on the backend
+}
+
+export interface CreateAttemptRequest {
+  quiz_id: string;
+  score: number;
+  total_questions: number;
+  correct_answers: number;
+  time_taken: number;
+  answers: AttemptAnswer[];
+}
+
+export interface CreateAttemptResponse {
+  message: string;
+  attempt: QuizAttempt;
+}
+
+export interface SubmitAnswerResponse {
+  message: string;
+  is_correct: boolean;
+  answer: {
+    id: string;
+    attempt_id: string;
+    question_id: string;
+    question_order: number;
+    selected_answer: string | string[];
+    is_correct: boolean;
+    created_at: string;
+  };
+}
+
 export interface ApiError {
   message: string;
   status?: number;
@@ -58,7 +100,7 @@ export interface AuthResponse {
 
 // Create a base axios instance
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -113,26 +155,69 @@ api.interceptors.response.use(
 export const quizApi = {
   // Get all quizzes
   getQuizzes: async (): Promise<Quiz[]> => {
-    const response = await api.get('/quiz');
+    const response = await api.get(QUIZ_ENDPOINTS.GET_ALL);
     return response.data;
   },
   
   // Get quiz by ID
   getQuizById: async (id: string): Promise<Quiz> => {
-    const response = await api.get(`/quiz/${id}`);
+    const response = await api.get(QUIZ_ENDPOINTS.GET_BY_ID(id));
     return response.data;
   },
   
   // Get questions for a quiz
   getQuizQuestions: async (quizId: string): Promise<QuizApiResponse> => {
-    const response = await api.get(`/question/quiz?quiz_id=${quizId}`);
+    const response = await api.get(QUIZ_ENDPOINTS.GET_QUESTIONS(quizId));
     return response.data;
   },
   
   // Submit a quiz attempt
-  submitQuizAttempt: async (attempt: QuizAttempt): Promise<any> => {
-    const response = await api.post('/quiz-attempts/create', attempt);
+  submitQuizAttempt: async (attempt: CreateAttemptRequest): Promise<QuizAttempt> => {
+    const response = await api.post(QUIZ_ENDPOINTS.SUBMIT_ATTEMPT, attempt);
+    return response.data.attempt;
+  },
+
+  // Create initial attempt
+  createInitialAttempt: async (quizId: string): Promise<QuizAttempt> => {
+    const response = await api.post('/quiz-attempts/initialize', { quiz_id: quizId });
+    return response.data.attempt;
+  },
+
+  // Submit answer
+  submitAnswer: async (
+    attemptId: string,
+    questionId: string,
+    selectedAnswer: string | string[],
+    questionOrder: number = 0
+  ): Promise<SubmitAnswerResponse> => {
+    const response = await api.post(`/quiz-attempts/${attemptId}/answers`, {
+      question_id: questionId,
+      selected_answer: selectedAnswer,
+      question_order: questionOrder
+    });
     return response.data;
+  },
+
+  // Get all attempts for the current user
+  getUserAttempts: async (): Promise<QuizAttemptDetails[]> => {
+    try {
+      const response = await api.get(QUIZ_ENDPOINTS.GET_USER_ATTEMPTS);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user attempts:', error);
+      return [];
+    }
+  },
+
+  // Get a specific attempt by ID
+  getAttemptById: async (id: string): Promise<QuizAttemptDetails | null> => {
+    try {
+      const response = await api.get(QUIZ_ENDPOINTS.GET_ATTEMPT_BY_ID(id));
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching attempt ${id}:`, error);
+      return null;
+    }
   }
 };
 
@@ -140,13 +225,13 @@ export const quizApi = {
 export const authApi = {
   // Login
   login: async (email: string, password: string): Promise<AuthResponse> => {
-    const response = await api.post('/auth/login', { email, password });
+    const response = await api.post(AUTH_ENDPOINTS.LOGIN, { email, password });
     return response.data;
   },
   
   // Register
   register: async (username: string, email: string, password: string): Promise<AuthResponse> => {
-    const response = await api.post('/auth/register', { username, email, password });
+    const response = await api.post(AUTH_ENDPOINTS.REGISTER, { username, email, password });
     return response.data;
   }
 };

@@ -1,6 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
-import Navigation from "@/components/Navigation";
+import { useState } from "react";
 import LandingHero from "@/components/LandingHero";
 import FeaturesSection from "@/components/FeaturesSection";
 import QuizInterface from "@/components/QuizInterface";
@@ -12,6 +11,7 @@ import SignInModal from "@/components/SignInModal"
 import SignUpModal from "@/components/SignUpModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { showToast } from "@/components/ui/toast";
+import { Link } from "react-router-dom";
 const Index = ({ activeSection: initialSection = "landing" }) => {
   const [activeSection, setActiveSection] = useState(initialSection);
   const [showModal, setShowModal] = useState(false); // 🛑 Manage modal state
@@ -63,72 +63,9 @@ const Index = ({ activeSection: initialSection = "landing" }) => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-white dark:bg-gray-900 shadow-sm z-10">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary rounded-lg p-2">
-              <span className="text-white font-bold text-xl">GP</span>
-            </div>
-            <span className="text-xl font-semibold hidden sm:inline-block">GrowthPulse</span>
-          </div>
-
-          <nav className="flex items-center space-x-6">
-            <button 
-              className={`text-sm font-medium ${activeSection === "landing" ? "text-primary" : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"}`}
-              onClick={() => setActiveSection("landing")}
-            >
-              Home
-            </button>
-            <button 
-              className={`text-sm font-medium ${activeSection === "quiz" ? "text-primary" : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"}`}
-              onClick={() => setActiveSection("quiz")}
-            >
-              Quiz
-            </button>
-            <button 
-              className={`text-sm font-medium ${activeSection === "dashboard" ? "text-primary" : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"}`}
-              onClick={() => setActiveSection("dashboard")}
-            >
-              Dashboard
-            </button>
-            {isAuthenticated ? (
-              <button 
-                className="btn-outline text-sm py-1.5"
-                onClick={() => {
-                  logout();
-                  showToast({
-                    message: 'You have been signed out successfully',
-                    type: 'success',
-                    duration: 3000
-                  });
-                }}
-              >
-                Sign Out
-              </button>
-            ) : (
-              <button 
-                className="btn-outline text-sm py-1.5"
-                onClick={() => setShowModal(true)} // 🛑 Open modal
-              >
-                Sign In
-              </button>
-            )}
-          </nav>
-        </div>
-      </header>
-
       <main className="flex-1">
         {renderSection()}
       </main>
-
-      <footer className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center text-sm text-gray-500 dark:text-gray-400">
-            <p>© 2025 GrowthPulse. All rights reserved.</p>
-            <p className="mt-2">An intelligent quiz platform for continuous learning.</p>
-          </div>
-        </div>
-      </footer>
 
       {/* 🛑 Use the modal component here */}
       <SignInModal 
