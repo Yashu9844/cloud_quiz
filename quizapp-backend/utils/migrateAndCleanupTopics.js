@@ -246,7 +246,7 @@ const closeConnection = async () => {
 (async () => {
   console.log("Starting duplicate topic migration and cleanup...");
   await migrateAndCleanupTopics();
-  console.log("Migration and cleanup process complete");
+
   process.exit(0);
 })();
 

@@ -11,7 +11,7 @@ import MLInsight from "../models/MLInsight.js";
  */
 export const generateUserInsights = async (userId) => {
   try {
-    console.log(`Generating ML insights for user: ${userId}`);
+   
     
     // Get completed quiz attempts for the user (limit to most recent 20 for better data)
     const attempts = await QuizAttempt.find({ 
@@ -23,7 +23,7 @@ export const generateUserInsights = async (userId) => {
     .lean();
     
     if (attempts.length === 0) {
-      console.log(`No completed quiz attempts found for user: ${userId}`);
+      
       return null;
     }
     
@@ -244,7 +244,7 @@ export const generateUserInsights = async (userId) => {
     
     await mlInsight.save();
     
-    console.log(`ML insights updated for user: ${userId} with ${Object.keys(topicProficiency).length} topics analyzed`);
+   
     return mlInsight;
     
   } catch (error) {

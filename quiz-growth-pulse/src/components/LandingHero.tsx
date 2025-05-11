@@ -1,7 +1,12 @@
-
 import { ArrowDown, BookOpen, Brain, ChevronRight, LightbulbIcon, LineChart } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const LandingHero = () => {
+  const [isVisible, setIsVisible] = useState(false);
+  
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
   return (
     <section className="relative overflow-hidden py-20 lg:py-32">
       {/* Animated background elements */}
@@ -26,27 +31,63 @@ const LandingHero = () => {
       
       <div className="container px-4 mx-auto">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 animate-fade-in text-balance">
-            Test Your Knowledge,<br />
-            <span className="gradient-text">Track Your Growth</span>
-          </h1>
+          <div className="overflow-hidden">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-balance">
+              <span 
+                className={`block transform transition-all duration-1000 ${
+                  isVisible 
+                    ? 'translate-y-0 opacity-100' 
+                    : 'translate-y-12 opacity-0'
+                }`}
+              >
+                Test Your Knowledge,
+              </span>
+              <span 
+                className={`block gradient-text text-white transform transition-all duration-1000 delay-300 ${
+                  isVisible 
+                    ? 'translate-y-0 opacity-100' 
+                    : 'translate-y-12 opacity-0'
+                }`}
+              >
+                Track Your Growth
+              </span>
+            </h1>
+          </div>
           
-          <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto animate-fade-in-slow text-balance">
+          <p 
+            className={`text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto text-balance transform transition-all duration-1000 delay-500 ${
+              isVisible 
+                ? 'translate-y-0 opacity-100' 
+                : 'translate-y-8 opacity-0'
+            }`}
+          >
             An intelligent quiz platform that adapts to your learning style and provides AI-driven insights to help you master any subject.
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 animate-fade-in-slow" style={{ animationDelay: '0.3s' }}>
-            <button className="btn-primary flex items-center px-8 py-3">
+          <div 
+            className={`flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 transform transition-all duration-1000 delay-700 ${
+              isVisible 
+                ? 'translate-y-0 opacity-100' 
+                : 'translate-y-8 opacity-0'
+            }`}
+          >
+            <button 
+              className="btn-primary flex items-center px-8 py-3 transition-transform duration-300 hover:scale-105 active:scale-95"
+            >
               Get Started <ChevronRight className="ml-1 h-4 w-4" />
             </button>
-            <button className="btn-outline flex items-center px-8 py-3">
+            <button 
+              className="btn-outline flex items-center px-8 py-3 transition-transform duration-300 hover:scale-105 active:scale-95"
+            >
               Explore Quizzes
             </button>
           </div>
           
           <a 
             href="#features" 
-            className="inline-flex items-center justify-center animate-bounce-light"
+            className={`inline-flex items-center justify-center animate-bounce-light transition-opacity duration-1000 delay-1000 ${
+              isVisible ? 'opacity-100' : 'opacity-0'
+            }`}
             aria-label="Scroll to features"
           >
             <ArrowDown className="h-6 w-6 text-primary" />
