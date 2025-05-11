@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./quizapp-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./quizapp-backend:/app
+    env_file:
+      - ./quizapp-backend/.env
+   
+
+  frontend:
+    build: ./quiz-growth-pulse
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./quiz-growth-pulse/.env
+    depends_on:
+      - backend
+
